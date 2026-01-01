@@ -1,7 +1,17 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import pool from '../config/db';
+import dotenv from 'dotenv';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
+
+dotenv.config();
+
+const fixPhotoUrl = (url: string | null, req: Request) => {
+    if (!url) return null;
+    const host = req.get('host') || 'localhost:5000';
+    return url.replace(/(http:\/\/|https:\/\/)(localhost|127\.0\.0\.1)(:\d+)?/g, `${req.protocol}://${host}`);
+};
 
 export const register = async (req: Request, res: Response) => {
     const { name, phone, email, password, role, car_model, car_color, plate_number } = req.body;
@@ -47,15 +57,23 @@ export const login = async (req: Request, res: Response) => {
                 }
             }
 
+
+            const token = jwt.sign(
+                { id: user.id, email: user.email, role: user.role },
+                process.env.JWT_SECRET || 'fallback_secret_key_change_in_prod',
+                { expiresIn: '24h' }
+            );
+
             res.json({
                 success: true,
+                token,
                 user: {
                     id: user.id,
                     name: user.name,
                     email: user.email,
                     phone: user.phone,
                     role: user.role,
-                    profile_photo: user.profile_photo,
+                    profile_photo: fixPhotoUrl(user.profile_photo, req),
                     ...vehicleInfo
                 },
             });
@@ -96,7 +114,7 @@ export const uploadProfilePhoto = async (req: Request, res: Response) => {
             [photoUrl, userId]
         );
 
-        res.json({ success: true, message: 'Photo uploaded successfully', photoUrl });
+        res.json({ success: true, message: 'Photo uploaded successfully', photoUrl: fixPhotoUrl(photoUrl, req) });
     } catch (error: any) {
         res.json({ success: false, message: error.message });
     }

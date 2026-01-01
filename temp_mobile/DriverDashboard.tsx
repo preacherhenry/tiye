@@ -96,28 +96,50 @@ export const DriverDashboard = ({ navigation }: any) => {
         }
     }, []);
 
+    const [routeCoords, setRouteCoords] = useState<any[]>([]);
+
     useEffect(() => {
+        let subscription: Location.LocationSubscription;
+
         (async () => {
             let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                return;
-            }
-            let location = await Location.getCurrentPositionAsync({});
-            setLocation(location);
+            if (status !== 'granted') return;
 
-            // Animate to new location
-            if (mapRef.current && location) {
-                mapRef.current.animateToRegion({
-                    latitude: location.coords.latitude,
-                    longitude: location.coords.longitude,
-                    latitudeDelta: 0.002,
-                    longitudeDelta: 0.002,
-                }, 1000);
-            }
+            // Get initial location
+            let currentLoc = await Location.getCurrentPositionAsync({});
+            setLocation(currentLoc);
 
-            checkActiveRide();
+            // Watch for updates
+            subscription = await Location.watchPositionAsync(
+                {
+                    accuracy: Location.Accuracy.High,
+                    timeInterval: 5000,
+                    distanceInterval: 10
+                },
+                (newLoc: Location.LocationObject) => {
+                    setLocation(newLoc);
+
+                    // Send update to backend
+                    if (user?.id) {
+                        api.post('/update-location', {
+                            userId: user.id,
+                            lat: newLoc.coords.latitude,
+                            lng: newLoc.coords.longitude
+                        }).catch((err: any) => console.log('Loc update failed', err));
+                    }
+
+                    // Animate map
+                    if (mapRef.current) {
+                        mapRef.current.animateCamera({ center: newLoc.coords, zoom: 15 }, { duration: 1000 });
+                    }
+                }
+            );
         })();
-    }, []);
+
+        return () => {
+            if (subscription) subscription.remove();
+        };
+    }, [user]);
 
     // Also poll for pending rides if online
     useEffect(() => {
@@ -228,6 +250,68 @@ export const DriverDashboard = ({ navigation }: any) => {
         }
     };
 
+    // Navigation Logic
+    useEffect(() => {
+        if (activeRide && location) {
+            const isToPickup = activeRide.status === 'accepted';
+            const destinationStr = isToPickup ? activeRide.pickup_location : activeRide.destination;
+
+            // Allow time for location to settle before routing
+            const timer = setTimeout(() => {
+                calculateDriverRoute(destinationStr);
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [activeRide, location]);
+
+    const decodePolyline = (t: string) => {
+        let points = [];
+        let index = 0, len = t.length;
+        let lat = 0, lng = 0;
+        while (index < len) {
+            let b, shift = 0, result = 0;
+            do {
+                b = t.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            let dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+            lat += dlat;
+            shift = 0;
+            result = 0;
+            do {
+                b = t.charCodeAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            let dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+            lng += dlng;
+            points.push({ latitude: (lat / 1e5), longitude: (lng / 1e5) });
+        }
+        return points;
+    };
+
+    const calculateDriverRoute = async (destText: string) => {
+        if (!location) return;
+        try {
+            // Geocode destination
+            const dRes = await Location.geocodeAsync(destText + ", Chirundu, Zambia");
+            if (dRes.length > 0) {
+                const d = dRes[0];
+                const p = location.coords;
+
+                const url = `http://router.project-osrm.org/route/v1/driving/${p.longitude},${p.latitude};${d.longitude},${d.latitude}?overview=full&geometries=polyline`;
+                const osrm = await fetch(url).then(r => r.json());
+
+                if (osrm.routes && osrm.routes.length > 0) {
+                    setRouteCoords(decodePolyline(osrm.routes[0].geometry));
+                }
+            }
+        } catch (e) {
+            console.log("Nav route failed", e);
+        }
+    };
+
     return (
         <View style={styles.container}>
             <MapView
@@ -236,11 +320,24 @@ export const DriverDashboard = ({ navigation }: any) => {
                 initialRegion={{
                     latitude: location?.coords.latitude || -16.042,
                     longitude: location?.coords.longitude || 28.855,
-                    latitudeDelta: 0.002,
-                    longitudeDelta: 0.002,
+                    latitudeDelta: 0.005,
+                    longitudeDelta: 0.005,
                 }}
                 showsUserLocation={true}
-            />
+            >
+                {/* Driver Route */}
+                {activeRide && routeCoords.length > 0 && (
+                    <Polyline coordinates={routeCoords} strokeColor={Colors.primary} strokeWidth={4} />
+                )}
+
+                {/* Destination Marker */}
+                {activeRide && (
+                    <Marker coordinate={{
+                        latitude: routeCoords.length > 0 ? routeCoords[routeCoords.length - 1].latitude : 0,
+                        longitude: routeCoords.length > 0 ? routeCoords[routeCoords.length - 1].longitude : 0
+                    }} />
+                )}
+            </MapView>
 
             <TouchableOpacity style={styles.menuButton} onPress={() => setSidebarOpen(true)}>
                 <Text style={{ fontSize: 24 }}>☰</Text>

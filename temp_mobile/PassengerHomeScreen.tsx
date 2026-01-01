@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Dimensions, TextInput, TouchableOpacity, Alert, Platform, ActivityIndicator, Animated, Image, KeyboardAvoidingView, ScrollView, Vibration } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TextInput, TouchableOpacity, Alert, Platform, ActivityIndicator, Animated, Image, KeyboardAvoidingView, ScrollView, Vibration, Linking } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { BlurView } from 'expo-blur';
@@ -247,20 +247,48 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                     const calcFare = 20 + ((route.distance / 1000) * 10);
                     setFare(Math.ceil(calcFare));
 
-                    setRideStatus('preview');
-
-                    mapRef.current?.fitToCoordinates([
-                        { latitude: p.latitude, longitude: p.longitude },
-                        { latitude: d.latitude, longitude: d.longitude }
-                    ], { edgePadding: { top: 50, right: 50, bottom: 300, left: 50 } });
+                    if (rideStatus === 'idle' || rideStatus === 'searching') {
+                        setRideStatus('preview');
+                        mapRef.current?.fitToCoordinates([
+                            { latitude: p.latitude, longitude: p.longitude },
+                            { latitude: d.latitude, longitude: d.longitude }
+                        ], { edgePadding: { top: 50, right: 50, bottom: 300, left: 50 } });
+                    }
                 }
             } else {
                 Alert.alert("Error", "Could not find locations.");
             }
         } catch (e) {
-            Alert.alert("Error", "Routing failed.");
+            console.log("Routing failed", e); // Silent fail preferred
         }
     };
+
+    // Real-time Driver Route (Driver -> Pickup)
+    useEffect(() => {
+        const fetchDriverRoute = async () => {
+            if (rideStatus === 'accepted' && driverLoc && pickup) {
+                try {
+                    const pRes = await Location.geocodeAsync(pickup + ", Chirundu, Zambia");
+                    if (pRes.length > 0) {
+                        const p = pRes[0]; // Pickup
+                        const d = driverLoc; // Driver
+
+                        const url = `http://router.project-osrm.org/route/v1/driving/${d.longitude},${d.latitude};${p.longitude},${p.latitude}?overview=full&geometries=polyline`;
+                        const osrm = await fetch(url).then(r => r.json());
+
+                        if (osrm.routes && osrm.routes.length > 0) {
+                            setRouteCoords(decodePolyline(osrm.routes[0].geometry));
+                        }
+                    }
+                } catch (e) { console.log('Driver route failed', e); }
+            }
+        };
+
+        // Fetch every 10s or when status changes
+        fetchDriverRoute();
+        const interval = setInterval(fetchDriverRoute, 10000);
+        return () => clearInterval(interval);
+    }, [rideStatus, driverLoc, pickup]);
 
     const confirmRequest = async () => {
         try {
@@ -430,12 +458,17 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                                 <View style={styles.driverRow}>
                                     {/* Driver Photo & Rating */}
                                     <View>
-                                        <View style={styles.avatarPlaceholder}><Text style={{ fontSize: 20 }}>👤</Text></View>
+                                        {rideInfo?.driver_photo ? (
+                                            <Image source={{ uri: rideInfo.driver_photo }} style={styles.driverAvatar} />
+                                        ) : (
+                                            <View style={styles.avatarPlaceholder}><Text style={{ fontSize: 20 }}>👤</Text></View>
+                                        )}
                                         <Text style={styles.rating}>⭐ {rideInfo?.driver_rating || '4.9'}</Text>
                                     </View>
 
                                     <View style={{ flex: 1, marginLeft: 10 }}>
                                         <Text style={styles.driverName}>{rideInfo?.driver_name || "Unknown Driver"}</Text>
+                                        {rideInfo?.driver_phone && <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>{rideInfo.driver_phone}</Text>}
                                         <Text style={styles.carInfo}>
                                             {rideInfo?.car_color} {rideInfo?.car_model}
                                         </Text>
@@ -444,7 +477,10 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                                         </View>
                                     </View>
 
-                                    <TouchableOpacity style={styles.callBtn}>
+                                    <TouchableOpacity style={styles.callBtn} onPress={() => {
+                                        if (rideInfo?.driver_phone) Linking.openURL(`tel:${rideInfo.driver_phone}`);
+                                        else Alert.alert("No Phone", "Driver phone number not available.");
+                                    }}>
                                         <Ionicons name="call" size={20} color="white" />
                                     </TouchableOpacity>
                                 </View>
@@ -541,6 +577,7 @@ const styles = StyleSheet.create({
     timeText: { fontWeight: 'bold', color: Colors.gray },
     driverRow: { flexDirection: 'row', alignItems: 'center' },
     avatarPlaceholder: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' },
+    driverAvatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#eee' },
     driverName: { fontWeight: 'bold', fontSize: 16 },
     carInfo: { color: Colors.gray, fontSize: 14 },
     plateBadge: { backgroundColor: '#f0f0f0', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 3, marginTop: 2, alignSelf: 'flex-start' },

@@ -3,6 +3,12 @@ import pool from '../config/db';
 import { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { isLocationInServiceArea } from '../config/serviceArea';
 
+const fixPhotoUrl = (url: string | null, req: Request) => {
+    if (!url) return null;
+    const host = req.get('host') || 'localhost:5000';
+    return url.replace(/(http:\/\/|https:\/\/)(localhost|127\.0\.0\.1)(:\d+)?/g, `${req.protocol}://${host}`);
+};
+
 export const getRideDetails = async (req: Request, res: Response) => {
     const { id } = req.params;
     try {
@@ -21,7 +27,23 @@ export const getRideDetails = async (req: Request, res: Response) => {
             res.json({ success: false, message: 'Ride not found' });
             return;
         }
-        res.json({ success: true, ride: rows[0] });
+
+        const ride = rows[0];
+        const userId = (req as any).user.id;
+        const userRole = (req as any).user.role;
+
+        // Security Check: Only allow Passenger or Driver involved in the ride (or Admin)
+        // Note: Assuming 'admin' role exists, checking strict ownership otherwise.
+        if (ride.passenger_id !== userId && ride.driver_id !== userId && userRole !== 'admin') {
+            res.status(403).json({ success: false, message: 'Unauthorized access to this ride' });
+            return;
+        }
+
+        if (ride.driver_photo) {
+            ride.driver_photo = fixPhotoUrl(ride.driver_photo, req);
+        }
+
+        res.json({ success: true, ride });
     } catch (error: any) {
         res.json({ success: false, message: error.message });
     }
