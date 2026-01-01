@@ -1,0 +1,36 @@
+// Patch for PassengerHomeScreen drawer header - Add this section around line 456
+<View style={styles.drawerHeader}>
+    {user?.profile_photo ? (
+        <Image 
+            source={{ uri: user.profile_photo }} 
+            style={styles.profilePhoto}
+        />
+    ) : (
+        <View style={styles.profilePhotoPlaceholder}>
+            <Ionicons name="person" size={40} color="#666" />
+        </View>
+    )}
+    <Text style={styles.drawerName}>{user?.name}</Text>
+    <Text style={styles.drawerPhone}>{user?.phone}</Text>
+</View>
+
+// Add to styles object:
+profilePhoto: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginBottom: 10,
+    borderWidth: 3,
+    borderColor: 'black',
+},
+profilePhotoPlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+    borderWidth: 2,
+    borderColor: 'black',
+},

@@ -8,8 +8,8 @@ if (!targetPath) {
     process.exit(1);
 }
 
-const mobileDir = path.resolve(__dirname, '../../taxi_mobile');
-const fullPath = path.join(mobileDir, targetPath);
+const mobilePath = path.resolve('c:/Users/lenovo/taxi_mobile', targetPath);
+const fullPath = mobilePath;
 
 try {
     const content = fs.readFileSync(fullPath, 'utf8');

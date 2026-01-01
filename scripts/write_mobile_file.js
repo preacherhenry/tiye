@@ -10,8 +10,8 @@ if (!targetPath || !sourceFile) {
 }
 
 const content = fs.readFileSync(sourceFile, 'utf8');
-const mobileDir = path.resolve(__dirname, '../../taxi_mobile');
-const fullPath = path.join(mobileDir, targetPath);
+const mobileRoot = 'c:/Users/lenovo/taxi_mobile';
+const fullPath = path.resolve(mobileRoot, targetPath);
 
 // Ensure dir exists
 fs.mkdirSync(path.dirname(fullPath), { recursive: true });

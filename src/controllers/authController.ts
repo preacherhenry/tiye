@@ -24,7 +24,7 @@ export const register = async (req: Request, res: Response) => {
             );
         }
 
-        res.json({ success: true, message: 'User registered successfully' });
+        res.json({ success: true, message: 'User registered successfully', userId });
     } catch (error: any) {
         console.error('Register Error:', error);
         res.json({ success: false, message: error.message });
@@ -39,6 +39,14 @@ export const login = async (req: Request, res: Response) => {
         const user = rows[0];
 
         if (user && (await bcrypt.compare(password, user.password))) {
+            let vehicleInfo = {};
+            if (user.role === 'driver') {
+                const [driverRows] = await pool.execute<RowDataPacket[]>('SELECT car_model, car_color, plate_number FROM drivers WHERE user_id = ?', [user.id]);
+                if (driverRows.length > 0) {
+                    vehicleInfo = driverRows[0];
+                }
+            }
+
             res.json({
                 success: true,
                 user: {
@@ -47,7 +55,8 @@ export const login = async (req: Request, res: Response) => {
                     email: user.email,
                     phone: user.phone,
                     role: user.role,
-                    profile_photo: user.profile_photo
+                    profile_photo: user.profile_photo,
+                    ...vehicleInfo
                 },
             });
         } else {
@@ -79,7 +88,8 @@ export const uploadProfilePhoto = async (req: Request, res: Response) => {
     }
 
     try {
-        const photoUrl = `http://${process.env.DB_HOST || 'localhost'}:${process.env.PORT || 5000}/uploads/${req.file.filename}`;
+        const host = req.get('host') || 'localhost:5000';
+        const photoUrl = `http://${host}/uploads/${req.file.filename}`;
 
         await pool.execute(
             'UPDATE users SET profile_photo = ? WHERE id = ?',

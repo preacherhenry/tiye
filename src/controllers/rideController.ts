@@ -8,7 +8,7 @@ export const getRideDetails = async (req: Request, res: Response) => {
     try {
         const [rows] = await pool.execute<RowDataPacket[]>(`
             SELECT r.*, 
-                   u.name as driver_name, u.phone as driver_phone, 
+                   u.name as driver_name, u.phone as driver_phone, u.profile_photo as driver_photo,
                    d.car_model, d.car_color, d.plate_number, d.rating as driver_rating,
                    u.current_lat, u.current_lng
             FROM ride_requests r 
