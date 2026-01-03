@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes';
 import rideRoutes from './routes/rideRoutes';
+import adminRoutes from './routes/adminRoutes';
+import driverRoutes from './routes/driverRoutes';
 
 dotenv.config();
 
@@ -13,9 +15,16 @@ app.use(cors());
 app.use(express.json());
 
 // Routes
-app.use('/uploads', express.static('uploads')); // Serve uploaded files
+const corsOptions = {
+    setHeaders: (res: any) => {
+        res.set('Access-Control-Allow-Origin', '*');
+    }
+};
+app.use('/uploads', express.static('uploads', corsOptions)); // Serve uploaded files with CORS
 app.use('/', authRoutes);
 app.use('/', rideRoutes);
+app.use('/admin', adminRoutes);
+app.use('/driver', driverRoutes);
 
 app.get('/', (req: Request, res: Response) => {
     res.json({ status: "Taxi node backend running" });

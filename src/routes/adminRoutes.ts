@@ -1,82 +1,52 @@
-import express from 'express';
-import pool from '../config/db';
-import { RowDataPacket } from 'mysql2';
+import { Router } from 'express';
+import { getPendingApplications, getRejectedApplications, getAnalyticsStats, getDashboardStats, getAllDrivers, toggleDriverStatus, getDriverProfile, getTripDetails, approveApplication, rejectApplication, getApplicationDetails, verifyDocument, getAllAdmins, createAdmin, toggleAdminStatus, updateAdminRole, updateAdminProfile, changePassword, uploadAdminProfilePhoto, getLoginHistory, getPassengers, updateUserStatus, getPassengerProfile } from '../controllers/adminController';
+import { authenticateToken, requireSuperAdmin } from '../middleware/authMiddleware';
+import multer from 'multer';
+import path from 'path';
 
-const router = express.Router();
+const router = Router();
 
-// Middleware to check if user is admin (simplified for now)
-// import { isAdmin } from '../middleware/authMiddleware';
-// router.use(isAdmin); 
-
-// 1. Dashboard Stats
-router.get('/stats', async (req, res) => {
-    try {
-        // Run queries in parallel for performance
-        const [passengers] = await pool.query<RowDataPacket[]>('SELECT COUNT(*) as count FROM users WHERE role = "user"');
-        const [drivers] = await pool.query<RowDataPacket[]>('SELECT COUNT(*) as count FROM users WHERE role = "driver"');
-        const [activeRides] = await pool.query<RowDataPacket[]>('SELECT COUNT(*) as count FROM ride_requests WHERE status IN ("pending", "accepted", "in_progress", "arrived")');
-        const [completedRides] = await pool.query<RowDataPacket[]>('SELECT COUNT(*) as count FROM ride_requests WHERE status = "completed"');
-        const [revenue] = await pool.query<RowDataPacket[]>('SELECT SUM(fare) as total FROM ride_requests WHERE status = "completed"');
-
-        res.json({
-            success: true,
-            stats: {
-                totalPassengers: passengers[0].count,
-                totalDrivers: drivers[0].count,
-                activeRides: activeRides[0].count,
-                completedRides: completedRides[0].count,
-                totalRevenue: revenue[0].total || 0
-            }
-        });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
+// Configure Multer for profile photos
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/');
+    },
+    filename: (req, file, cb) => {
+        cb(null, `admin-${Date.now()}${path.extname(file.originalname)}`);
     }
 });
+const upload = multer({ storage });
 
-// 2. Get All Users (Drivers or Passengers)
-router.get('/users', async (req, res) => {
-    const role = req.query.role as string; // 'driver' or 'user'
-    try {
-        let query = 'SELECT id, name, email, phone, role, created_at, profile_photo FROM users';
-        const params: any[] = [];
+// Apply authentication to all admin routes
+router.use(authenticateToken);
 
-        if (role) {
-            query += ' WHERE role = ?';
-            params.push(role);
-        }
+router.get('/applications', getPendingApplications);
+router.get('/rejected', getRejectedApplications);
+router.get('/analytics', getAnalyticsStats);
+router.get('/dashboard-stats', getDashboardStats);
+router.get('/drivers', getAllDrivers);
+router.post('/drivers/:id/status', toggleDriverStatus);
+router.get('/drivers/:id/profile', getDriverProfile);
+router.get('/trips/:id', getTripDetails);
+router.get('/applications/:id', getApplicationDetails);
+router.post('/applications/:id/approve', approveApplication);
+router.post('/applications/:id/reject', rejectApplication);
+router.post('/documents/:docId/verify', verifyDocument);
 
-        query += ' ORDER BY created_at DESC';
+router.get('/passengers', getPassengers);
+router.get('/passengers/:id/profile', getPassengerProfile);
+router.put('/users/:id/status', updateUserStatus);
 
-        const [rows] = await pool.query(query, params);
-        res.json({ success: true, users: rows });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+// Super Admin only routes
+router.get('/admins', requireSuperAdmin, getAllAdmins);
+router.post('/admins', requireSuperAdmin, createAdmin);
+router.post('/admins/:id/status', requireSuperAdmin, toggleAdminStatus);
+router.post('/admins/:id/role', requireSuperAdmin, updateAdminRole);
 
-// 3. Get All Rides
-router.get('/rides', async (req, res) => {
-    try {
-        const [rows] = await pool.query('SELECT * FROM ride_requests ORDER BY created_at DESC LIMIT 100');
-        res.json({ success: true, rides: rows });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-// 4. Approve Driver (Example action)
-router.post('/approve-driver', async (req, res) => {
-    const { userId } = req.body;
-    try {
-        // Determine what "approval" means. 
-        // For now, maybe we set a 'verified' flag in drivers table?
-        // Or just assume they are active if they exist.
-        // Let's assume we have a status column in drivers table (need to verify schema).
-        // For now, return success mock.
-        res.json({ success: true, message: `Driver ${userId} approved` });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+// Profile & Settings routes
+router.put('/profile', updateAdminProfile);
+router.post('/change-password', changePassword);
+router.post('/profile-photo', upload.single('photo'), uploadAdminProfilePhoto);
+router.get('/login-history', getLoginHistory);
 
 export default router;

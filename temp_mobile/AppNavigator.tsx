@@ -14,6 +14,7 @@ import DriverRidesScreen from '../screens/driver/sidebar/DriverRidesScreen';
 import DriverEarningsScreen from '../screens/driver/sidebar/DriverEarningsScreen';
 import DriverSettingsScreen from '../screens/driver/sidebar/DriverSettingsScreen';
 import DriverSupportScreen from '../screens/driver/sidebar/DriverSupportScreen';
+import DriverApplyScreen from '../screens/auth/DriverApplyScreen';
 import { useAuth } from '../context/AuthContext';
 import { Colors } from '../constants/colors';
 
@@ -52,6 +53,7 @@ export const AppNavigator = () => {
                     <>
                         <Stack.Screen name="Login" component={LoginScreen} />
                         <Stack.Screen name="Register" component={RegisterScreen} />
+                        <Stack.Screen name="DriverApply" component={DriverApplyScreen} />
                     </>
                 )}
             </Stack.Navigator>

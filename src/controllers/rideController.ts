@@ -29,6 +29,7 @@ export const getRideDetails = async (req: Request, res: Response) => {
         }
 
         const ride = rows[0];
+        // console.log(`📦 Ride Details for ${id}: Status=${ride.status}, Driver=${ride.driver_id}, Phone=${ride.driver_phone}, Lat=${ride.current_lat}`);
         const userId = (req as any).user.id;
         const userRole = (req as any).user.role;
 
@@ -138,9 +139,16 @@ export const acceptRide = async (req: Request, res: Response) => {
             return;
         }
 
+        // Update ride status and Driver online_status
         await pool.execute(
             "UPDATE ride_requests SET status = 'accepted', driver_id = ? WHERE id = ?",
             [driver_id, ride_id]
+        );
+
+        // Update driver status to on_trip
+        await pool.execute(
+            "UPDATE drivers SET online_status = 'on_trip', last_seen_at = NOW() WHERE user_id = ?",
+            [driver_id]
         );
 
         const [updatedRides] = await pool.execute<RowDataPacket[]>('SELECT * FROM ride_requests WHERE id = ?', [ride_id]);
@@ -171,6 +179,19 @@ export const updateRideStatus = async (req: Request, res: Response) => {
             "UPDATE ride_requests SET status = ? WHERE id = ?",
             [status, ride_id]
         );
+
+        // If trip ended, set driver back to online
+        if (status === 'completed' || status === 'cancelled') {
+            const [rideRows] = await pool.execute<RowDataPacket[]>('SELECT driver_id FROM ride_requests WHERE id = ?', [ride_id]);
+            if (rideRows.length > 0) {
+                const driverId = rideRows[0].driver_id;
+                await pool.execute(
+                    "UPDATE drivers SET online_status = 'online', last_seen_at = NOW() WHERE user_id = ?",
+                    [driverId]
+                );
+            }
+        }
+
         res.json({ success: true, message: `Ride updated to ${status}` });
     } catch (error: any) {
         res.json({ success: false, message: error.message });

@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #A855F7;
+  --color-secondary: #EAB308;
+  --color-surface: #1F2937;
+  --color-background: #111827;
+  --color-text: #F9FAFB;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-text);
+  }
+
+  /* Light mode overrides */
+  html.light {
+    --color-background: #F3F4F6;
+    --color-surface: #FFFFFF;
+    --color-text: #111827;
+  }
+
+  html.light body {
+    background-color: #F3F4F6;
+    color: #111827;
+  }
+
+  html.light .glass {
+    background: rgba(255, 255, 255, 0.8) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  }
+
+  html.light .text-gray-400 {
+    color: #6B7280 !important;
+  }
+
+  html.light .text-gray-500 {
+    color: #9CA3AF !important;
+  }
+
+  html.light .text-gray-600 {
+    color: #4B5563 !important;
+  }
+
+  html.light .bg-white\/5 {
+    background-color: rgba(0, 0, 0, 0.05) !important;
+  }
+
+  html.light .bg-white\/10 {
+    background-color: rgba(0, 0, 0, 0.1) !important;
+  }
+
+  html.light .border-white\/5 {
+    border-color: rgba(0, 0, 0, 0.05) !important;
+  }
+
+  html.light .border-white\/10 {
+    border-color: rgba(0, 0, 0, 0.1) !important;
+  }
+
+  html.light .bg-surface {
+    background-color: #FFFFFF !important;
+  }
+
+  html.light .text-text {
+    color: #111827 !important;
+  }
+}
+
+.glass {
+  background: rgba(31, 41, 55, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}

@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { register, login, updateLocation, uploadProfilePhoto } from '../controllers/authController';
-import multer from 'multer';
+import { register, login, logout, updateLocation, uploadProfilePhoto, applyDriver } from '../controllers/authController';
+import { authenticateToken } from '../middleware/authMiddleware'; import multer from 'multer';
 import path from 'path';
 
 const router = Router();
@@ -17,7 +17,14 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 router.post('/register', register);
+router.post('/apply-driver', upload.fields([
+    { name: 'license_document', maxCount: 1 },
+    { name: 'national_id_document', maxCount: 1 },
+    { name: 'vehicle_registration_document', maxCount: 1 },
+    { name: 'profile_photo', maxCount: 1 }
+]), applyDriver);
 router.post('/login', login);
+router.post('/logout', authenticateToken, logout);
 router.post('/update-location', updateLocation);
 router.post('/upload-photo', upload.single('photo'), uploadProfilePhoto);
 

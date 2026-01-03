@@ -25,3 +25,10 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
         res.status(403).json({ success: false, message: 'Invalid token' });
     }
 };
+
+export const requireSuperAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (req.user?.role !== 'super_admin') {
+        return res.status(403).json({ success: false, message: 'Access denied. Super admin privileges required.' });
+    }
+    next();
+};

@@ -29,6 +29,7 @@ const Sidebar = ({ isOpen, onClose, user, onUploadPhoto, onLogout, navigation }:
                     <BlurView intensity={20} style={StyleSheet.absoluteFill} tint="dark" />
                 </TouchableOpacity>
             )}
+            {/* @ts-ignore */}
             <Animated.View style={[styles.sidebar, { transform: [{ translateX: slideAnim }] }]}>
                 <View style={styles.sidebarHeader}>
                     <TouchableOpacity onPress={onUploadPhoto}>
@@ -66,14 +67,14 @@ const Sidebar = ({ isOpen, onClose, user, onUploadPhoto, onLogout, navigation }:
 export const DriverDashboard = ({ navigation }: any) => {
     const { user, login, logout } = useAuth();
     const [isSidebarOpen, setSidebarOpen] = useState(false);
-    const [location, setLocation] = useState<Location.LocationObject | null>(null);
+    const [location, setLocation] = useState<any>(null);
     const [pendingRides, setPendingRides] = useState<any[]>([]);
     const [activeRide, setActiveRide] = useState<any>(null);
     // const [isOnline, setIsOnline] = useState(false); // Removed: Always online
     const isOnline = true; // Always true
     const [isLoading, setIsLoading] = useState(false);
     const [localPhoto, setLocalPhoto] = useState(user?.profile_photo);
-    const mapRef = useRef<MapView>(null);
+    const mapRef = useRef<any>(null);
 
     // Update local photo if user context updates
     useEffect(() => {
@@ -98,52 +99,54 @@ export const DriverDashboard = ({ navigation }: any) => {
 
     const [routeCoords, setRouteCoords] = useState<any[]>([]);
 
-    useEffect(() => {
-        let subscription: Location.LocationSubscription;
+    const locationSubscription = useRef<any>(null);
 
-        (async () => {
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') return;
+    const startLocationTracking = async () => {
+        if (locationSubscription.current) return;
 
-            // Get initial location
-            let currentLoc = await Location.getCurrentPositionAsync({});
-            setLocation(currentLoc);
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
 
-            // Watch for updates
-            subscription = await Location.watchPositionAsync(
-                {
-                    accuracy: Location.Accuracy.High,
-                    timeInterval: 5000,
-                    distanceInterval: 10
-                },
-                (newLoc: Location.LocationObject) => {
-                    setLocation(newLoc);
+        let currentLoc = await Location.getCurrentPositionAsync({});
+        setLocation(currentLoc);
 
-                    // Send update to backend
-                    if (user?.id) {
-                        api.post('/update-location', {
-                            userId: user.id,
-                            lat: newLoc.coords.latitude,
-                            lng: newLoc.coords.longitude
-                        }).catch((err: any) => console.log('Loc update failed', err));
-                    }
-
-                    // Animate map
-                    if (mapRef.current) {
-                        mapRef.current.animateCamera({ center: newLoc.coords, zoom: 15 }, { duration: 1000 });
-                    }
+        locationSubscription.current = await Location.watchPositionAsync(
+            {
+                accuracy: Location.Accuracy.High,
+                timeInterval: 5000,
+                distanceInterval: 10
+            },
+            (newLoc: Location.LocationObject) => {
+                setLocation(newLoc);
+                if (user?.id) {
+                    api.post('/update-location', {
+                        userId: user.id,
+                        lat: newLoc.coords.latitude,
+                        lng: newLoc.coords.longitude
+                    }).catch((err: any) => console.log('Loc update failed', err));
                 }
-            );
-        })();
+                if (mapRef.current) {
+                    mapRef.current.animateCamera({ center: newLoc.coords, zoom: 15 }, { duration: 1000 });
+                }
+            }
+        );
+    };
 
-        return () => {
-            if (subscription) subscription.remove();
-        };
+    const stopLocationTracking = () => {
+        if (locationSubscription.current) {
+            locationSubscription.current.remove();
+            locationSubscription.current = null;
+        }
+    };
+
+    useEffect(() => {
+        startLocationTracking();
+        return () => stopLocationTracking();
     }, [user]);
 
     // Also poll for pending rides if online
     useEffect(() => {
-        let interval: NodeJS.Timeout;
+        let interval: any;
         if (isOnline && !activeRide) {
             fetchPendingRides();
             interval = setInterval(fetchPendingRides, 5000);
@@ -251,18 +254,8 @@ export const DriverDashboard = ({ navigation }: any) => {
     };
 
     // Navigation Logic
-    useEffect(() => {
-        if (activeRide && location) {
-            const isToPickup = activeRide.status === 'accepted';
-            const destinationStr = isToPickup ? activeRide.pickup_location : activeRide.destination;
-
-            // Allow time for location to settle before routing
-            const timer = setTimeout(() => {
-                calculateDriverRoute(destinationStr);
-            }, 1000);
-            return () => clearTimeout(timer);
-        }
-    }, [activeRide, location]);
+    const [pickupCoords, setPickupCoords] = useState<any>(null);
+    const [destinationCoords, setDestinationCoords] = useState<any>(null);
 
     const decodePolyline = (t: string) => {
         let points = [];
@@ -291,24 +284,81 @@ export const DriverDashboard = ({ navigation }: any) => {
         return points;
     };
 
-    const calculateDriverRoute = async (destText: string) => {
+    useEffect(() => {
+        if (activeRide) {
+            geocodeTrip();
+        } else {
+            setPickupCoords(null);
+            setDestinationCoords(null);
+            setRouteCoords([]);
+        }
+    }, [activeRide?.id]);
+
+    const geocodeTrip = async () => {
+        try {
+            const pRes = await Location.geocodeAsync(activeRide.pickup_location + ", Chirundu, Zambia");
+            const dRes = await Location.geocodeAsync(activeRide.destination + ", Chirundu, Zambia");
+            if (pRes.length > 0) setPickupCoords(pRes[0]);
+            if (dRes.length > 0) setDestinationCoords(dRes[0]);
+        } catch (e) {
+            console.log("Geocoding trip failed", e);
+        }
+    };
+
+    useEffect(() => {
+        if (activeRide && location && pickupCoords && destinationCoords) {
+            const isToPickup = activeRide.status === 'accepted' || activeRide.status === 'arrived';
+            const target = isToPickup ? pickupCoords : destinationCoords;
+            calculateDriverRoute(target);
+
+            // Auto zoom to fit trip
+            const coords = [location.coords, pickupCoords, destinationCoords];
+            mapRef.current?.fitToCoordinates(coords, {
+                edgePadding: { top: 100, right: 100, bottom: 300, left: 100 },
+                animated: true
+            });
+        }
+    }, [activeRide?.status, location?.coords.latitude, pickupCoords, destinationCoords]);
+
+    const calculateDriverRoute = async (target: any) => {
         if (!location) return;
         try {
-            // Geocode destination
-            const dRes = await Location.geocodeAsync(destText + ", Chirundu, Zambia");
-            if (dRes.length > 0) {
-                const d = dRes[0];
-                const p = location.coords;
+            const p = location.coords;
+            const url = `http://router.project-osrm.org/route/v1/driving/${p.longitude},${p.latitude};${target.longitude},${target.latitude}?overview=full&geometries=polyline`;
+            const osrm = await fetch(url).then(r => r.json());
 
-                const url = `http://router.project-osrm.org/route/v1/driving/${p.longitude},${p.latitude};${d.longitude},${d.latitude}?overview=full&geometries=polyline`;
-                const osrm = await fetch(url).then(r => r.json());
-
-                if (osrm.routes && osrm.routes.length > 0) {
-                    setRouteCoords(decodePolyline(osrm.routes[0].geometry));
-                }
+            if (osrm.routes && osrm.routes.length > 0) {
+                setRouteCoords(decodePolyline(osrm.routes[0].geometry));
             }
         } catch (e) {
             console.log("Nav route failed", e);
+        }
+    };
+
+    const handleUpdateStatus = async (status: string) => {
+        try {
+            const res = await api.post('/update-ride-status', { ride_id: activeRide.id, status });
+            if (res.data.success) {
+                if (status === 'completed') {
+                    setActiveRide(null);
+                    setRouteCoords([]);
+                    stopLocationTracking(); // Stop tracking as requested
+                    Alert.alert(
+                        "✅ Trip Completed",
+                        "You've successfully completed the trip!",
+                        [{
+                            text: "OK", onPress: () => {
+                                // Optionally restart tracking if they should stay online for new rides
+                                // startLocationTracking(); 
+                            }
+                        }]
+                    );
+                } else {
+                    setActiveRide({ ...activeRide, status });
+                }
+            }
+        } catch (error) {
+            Alert.alert("Error", "Failed to update status");
         }
     };
 
@@ -330,12 +380,24 @@ export const DriverDashboard = ({ navigation }: any) => {
                     <Polyline coordinates={routeCoords} strokeColor={Colors.primary} strokeWidth={4} />
                 )}
 
+                {/* Pickup Marker */}
+                {pickupCoords && (
+                    <Marker
+                        coordinate={pickupCoords}
+                        title="Pickup"
+                        description={activeRide?.pickup_location}
+                        pinColor="green"
+                    />
+                )}
+
                 {/* Destination Marker */}
-                {activeRide && (
-                    <Marker coordinate={{
-                        latitude: routeCoords.length > 0 ? routeCoords[routeCoords.length - 1].latitude : 0,
-                        longitude: routeCoords.length > 0 ? routeCoords[routeCoords.length - 1].longitude : 0
-                    }} />
+                {destinationCoords && (
+                    <Marker
+                        coordinate={destinationCoords}
+                        title="Destination"
+                        description={activeRide?.destination}
+                        pinColor="red"
+                    />
                 )}
             </MapView>
 
@@ -354,10 +416,10 @@ export const DriverDashboard = ({ navigation }: any) => {
                         ) : (
                             pendingRides.map(ride => (
                                 <View key={ride.id} style={styles.rideCard}>
-                                    <View>
+                                    <View style={{ flex: 1 }}>
                                         <Text style={styles.pickup}>📍 {ride.pickup_location}</Text>
                                         <Text style={styles.destination}>🏁 {ride.destination}</Text>
-                                        <Text style={styles.fare}>💰 ${ride.fare} • {ride.distance}km</Text>
+                                        <Text style={styles.fare}>💰 K{ride.fare} • {ride.distance}km</Text>
                                     </View>
                                     <TouchableOpacity
                                         style={styles.acceptButton}
@@ -374,15 +436,38 @@ export const DriverDashboard = ({ navigation }: any) => {
 
             {activeRide && (
                 <View style={styles.activeRidePanel}>
-                    <Text style={styles.activeTitle}>Current Ride</Text>
-                    <Text style={styles.pickup}>Pickup: {activeRide.pickup_location}</Text>
-                    <Text style={styles.destination}>Dropoff: {activeRide.destination}</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={styles.activeTitle}>Trip in Progress</Text>
+                        <Text style={[styles.statusBadge, { backgroundColor: activeRide.status === 'accepted' ? Colors.primary : Colors.success }]}>
+                            {activeRide.status.toUpperCase()}
+                        </Text>
+                    </View>
+
+                    <Text style={styles.pickup}><Text style={{ color: 'green' }}>From:</Text> {activeRide.pickup_location}</Text>
+                    <Text style={styles.destination}><Text style={{ color: 'red' }}>To:</Text> {activeRide.destination}</Text>
+
                     <View style={styles.divider} />
-                    <TouchableOpacity style={styles.navButton}>
-                        <Text style={styles.navText}>Started / Navigate</Text>
-                    </TouchableOpacity>
+
+                    {activeRide.status === 'accepted' && (
+                        <TouchableOpacity style={styles.navButton} onPress={() => handleUpdateStatus('arrived')}>
+                            <Text style={styles.navText}>I HAVE ARRIVED</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {activeRide.status === 'arrived' && (
+                        <TouchableOpacity style={[styles.navButton, { backgroundColor: Colors.success }]} onPress={() => handleUpdateStatus('in_progress')}>
+                            <Text style={styles.navText}>START TRIP</Text>
+                        </TouchableOpacity>
+                    )}
+
+                    {activeRide.status === 'in_progress' && (
+                        <TouchableOpacity style={[styles.navButton, { backgroundColor: 'red' }]} onPress={() => handleUpdateStatus('completed')}>
+                            <Text style={styles.navText}>COMPLETE TRIP</Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             )}
+
 
             <Sidebar
                 isOpen={isSidebarOpen}
@@ -439,6 +524,14 @@ const styles = StyleSheet.create({
         backgroundColor: 'white', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20
     },
     activeTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10, color: Colors.primary },
+    statusBadge: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 5,
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 12
+    },
     divider: { height: 1, backgroundColor: '#eee', marginVertical: 10 },
     navButton: { backgroundColor: Colors.secondary, padding: 15, borderRadius: 10, alignItems: 'center' },
     navText: { color: Colors.primary, fontWeight: 'bold' },

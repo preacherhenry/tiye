@@ -48,20 +48,22 @@ const MenuItem = ({ icon, label, onPress, danger = false }: any) => (
 
 export const PassengerHomeScreen = ({ navigation }: any) => {
     const { user, logout } = useAuth();
-    const mapRef = useRef<MapView>(null);
-    const [location, setLocation] = useState<Location.LocationObject | null>(null);
+    const mapRef = useRef<any>(null);
+    const [location, setLocation] = useState<any>(null);
     const [isLoadingLoc, setIsLoadingLoc] = useState(true);
 
     // Ride State
     const [pickup, setPickup] = useState('');
     const [destination, setDestination] = useState('');
     // Added 'cancelled' to state type
-    const [rideStatus, setRideStatus] = useState<'idle' | 'preview' | 'searching' | 'accepted' | 'arrived' | 'in_progress' | 'completed' | 'cancelled'>('idle');
+    const [rideStatus, setRideStatus] = useState<any>('idle');
     const [rideInfo, setRideInfo] = useState<any>(null);
     const [fare, setFare] = useState(0);
     const [distance, setDistance] = useState(0);
-    const [routeCoords, setRouteCoords] = useState<{ latitude: number, longitude: number }[]>([]);
-    const [driverLoc, setDriverLoc] = useState<{ latitude: number, longitude: number } | null>(null);
+    const [routeCoords, setRouteCoords] = useState<any[]>([]);
+    const [driverLoc, setDriverLoc] = useState<any>(null);
+    const [pickupCoords, setPickupCoords] = useState<any>(null);
+    const [destCoords, setDestCoords] = useState<any>(null);
 
     // Drawer State
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -124,13 +126,17 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                     );
 
                     if (activeRide) {
-                        console.log("Restoring active ride:", activeRide.id);
+                        console.log("Restored Ride Status:", activeRide.status);
                         setRideInfo(activeRide);
                         setPickup(activeRide.pickup_location);
                         setDestination(activeRide.destination);
                         setFare(activeRide.fare);
                         setDistance(activeRide.distance);
-                        setRideStatus(activeRide.status === 'pending' ? 'searching' : activeRide.status);
+                        const mapped = activeRide.status === 'pending' ? 'searching' : activeRide.status;
+                        setRideStatus(mapped);
+
+                        // Geocode restored locations
+                        geocodeLocations(activeRide.pickup_location, activeRide.destination);
                     }
                 }
             } catch (e) {
@@ -140,24 +146,125 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
         restoreRide();
     }, [user]);
 
+    const geocodeLocations = async (p: string, d: string) => {
+        try {
+            const pRes = await Location.geocodeAsync(p + ", Chirundu, Zambia");
+            const dRes = await Location.geocodeAsync(d + ", Chirundu, Zambia");
+            if (pRes.length > 0) setPickupCoords(pRes[0]);
+            if (dRes.length > 0) setDestCoords(dRes[0]);
+        } catch (e) { console.log("Geocode failed", e); }
+    };
 
-    // 3. Poll for Ride Status
+
+    // Use refs for polling to avoid stale closures without resetting interval
+    const rideInfoRef = useRef(rideInfo);
+    const rideStatusRef = useRef(rideStatus);
+
     useEffect(() => {
-        console.log('⚡ rideStatus changed to:', rideStatus);
-        console.log('   rideInfo:', JSON.stringify(rideInfo));
-        let interval: NodeJS.Timeout;
-        if (rideStatus === 'searching' || rideStatus === 'accepted' || rideStatus === 'arrived' || rideStatus === 'in_progress' || rideStatus === 'completed') {
-            const id = rideInfo?.id;
-            console.log('⏰ Starting polling interval for Ride ID:', id);
-            interval = setInterval(checkRideStatus, 3000);
-        }
-        return () => {
-            if (interval) {
-                console.log('🛑 Clearing polling interval');
-                clearInterval(interval);
+        rideInfoRef.current = rideInfo;
+        rideStatusRef.current = rideStatus;
+    }, [rideInfo, rideStatus]);
+
+    // 3. Poll for Ride Status (Robust)
+    useEffect(() => {
+        let interval: any;
+
+        const poll = async () => {
+            const currentStatus = rideStatusRef.current;
+            const currentRide = rideInfoRef.current;
+            const id = currentRide?.id;
+
+            // Ensure we only poll if we have an ID and are in an active state
+            const activeStatuses = ['searching', 'accepted', 'arrived', 'in_progress'];
+            if (!id || !activeStatuses.includes(currentStatus)) {
+                return;
+            }
+
+            try {
+                // console.log(`📡 Polling status for ride ${id}...`);
+                const res = await api.get(`/ride/${id}`);
+                if (res.data.success) {
+                    const updatedRide = res.data.ride;
+
+                    // Handle Status Change
+                    const mappedStatus = updatedRide.status === 'pending' ? 'searching' : updatedRide.status;
+                    if (mappedStatus !== currentStatus) {
+                        console.log('✅ Status changed:', currentStatus, '->', mappedStatus);
+
+                        if (mappedStatus === 'accepted' && currentStatus === 'searching') {
+                            Vibration.vibrate(1000);
+                            Alert.alert("🎉 Ride Accepted", "A driver is on their way!");
+                        }
+
+                        if (mappedStatus === 'arrived' && currentStatus === 'accepted') {
+                            Vibration.vibrate([0, 500, 200, 500]);
+                            Alert.alert("👋 Driver Arrived", "Your driver has arrived at the pickup location!");
+                        }
+
+                        if (mappedStatus === 'completed') {
+                            Vibration.vibrate(500);
+                            Alert.alert(
+                                "✅ Trip Completed",
+                                `Hope you enjoyed your ride with ${updatedRide.driver_name || 'Tiye'}!\n\nTotal Fare: K${updatedRide.fare}`,
+                                [{ text: "Book Another", onPress: resetToIdle }]
+                            );
+                            return; // Stop processing this poll
+                        }
+
+                        setRideStatus(mappedStatus);
+                        setRideInfo(updatedRide);
+                    }
+
+                    // Handle Location/Driver Update even if status is same (e.g. driver moving or info populated)
+                    if (JSON.stringify(updatedRide) !== JSON.stringify(currentRide)) {
+                        setRideInfo(updatedRide);
+                    }
+
+                    if (updatedRide.current_lat && updatedRide.current_lng) {
+                        setDriverLoc({
+                            latitude: parseFloat(updatedRide.current_lat),
+                            longitude: parseFloat(updatedRide.current_lng)
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error("Polling error:", error);
             }
         };
-    }, [rideStatus, rideInfo]);
+
+        // Run poll immediately then interval
+        if (['searching', 'accepted', 'arrived', 'in_progress'].includes(rideStatus)) {
+            poll();
+            interval = setInterval(poll, 3000);
+        }
+
+        return () => clearInterval(interval);
+    }, [rideStatus]);
+
+    // Reset App to Idle State
+    const resetToIdle = () => {
+        // Correcting: removed setRideId(null) as it doesn't exist
+        setRideStatus('idle');
+        setRideInfo(null);
+        setRouteCoords([]);
+        setDriverLoc(null);
+        setPickup('');
+        setDestination('');
+        setDistance(0);
+        setFare(0);
+        setPickupCoords(null);
+        setDestCoords(null);
+        // Reset camera to user
+        if (location && mapRef.current) {
+            mapRef.current.animateToRegion({
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+                latitudeDelta: 0.01,
+                longitudeDelta: 0.01,
+            });
+        }
+    };
+
 
     // Drawer Animation Logic
     useEffect(() => {
@@ -169,55 +276,6 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
     }, [isMenuOpen]);
 
     const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
-
-    const checkRideStatus = async () => {
-        console.log('🔍 checkRideStatus called. rideInfo:', rideInfo);
-
-        if (!rideInfo?.id) {
-            console.log('❌ No rideInfo.id, returning.');
-            return;
-        }
-
-        try {
-            console.log(`📡 Fetching status for ride ${rideInfo.id}...`);
-            const res = await api.get(`/ride/${rideInfo.id}`);
-            if (res.data.success) {
-                const updatedRide = res.data.ride;
-                console.log('🔄 Polling Ride:', updatedRide.id, 'Status:', updatedRide.status);
-
-                // If ride is cancelled or completed
-                if (['completed', 'cancelled'].includes(updatedRide.status) && rideStatus !== updatedRide.status) {
-                    console.log('⚠️ Ride ended:', updatedRide.status);
-                    setRideStatus(updatedRide.status);
-                    if (updatedRide.status === 'cancelled') {
-                        Alert.alert("Ride Cancelled", "This ride has been cancelled.");
-                    }
-                    setDriverLoc(null);
-                    setRouteCoords([]);
-                } else if (rideStatus !== updatedRide.status) {
-                    console.log('✅ Status changed:', rideStatus, '->', updatedRide.status);
-
-                    // FEEDBACK: Vibrate and Alert when driver accepts
-                    if (updatedRide.status === 'accepted' && rideStatus === 'searching') {
-                        Vibration.vibrate(1000);
-                        Alert.alert("🎉 Ride Accepted", "A driver is on their way!");
-                    }
-
-                    setRideStatus(updatedRide.status === 'pending' ? 'searching' : updatedRide.status);
-                    setRideInfo(updatedRide);
-
-                    if (updatedRide.current_lat && updatedRide.current_lng) {
-                        setDriverLoc({
-                            latitude: parseFloat(updatedRide.current_lat),
-                            longitude: parseFloat(updatedRide.current_lng)
-                        });
-                    }
-                }
-            }
-        } catch (error) {
-            console.error(error);
-        }
-    };
 
     const handleRequestPreview = async () => {
         if (!pickup || !destination) {
@@ -249,6 +307,8 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
 
                     if (rideStatus === 'idle' || rideStatus === 'searching') {
                         setRideStatus('preview');
+                        setPickupCoords(p);
+                        setDestCoords(d);
                         mapRef.current?.fitToCoordinates([
                             { latitude: p.latitude, longitude: p.longitude },
                             { latitude: d.latitude, longitude: d.longitude }
@@ -302,6 +362,8 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
             if (res.data.success) {
                 setRideStatus('searching');
                 setRideInfo({ id: res.data.rideId });
+                // Geocode for visualization if not already done
+                if (!pickupCoords) geocodeLocations(pickup, destination);
             }
         } catch (e) {
             Alert.alert("Error", "Failed to request ride.");
@@ -344,6 +406,20 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
         setDriverLoc(null);
         setPickup('');
         setDestination('');
+        setFare(0);
+        setDistance(0);
+        setPickupCoords(null);
+        setDestCoords(null);
+
+        // Center back to user
+        if (location && mapRef.current) {
+            mapRef.current.animateToRegion({
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+                latitudeDelta: ZOOM_LEVEL,
+                longitudeDelta: ZOOM_LEVEL,
+            }, 1000);
+        }
     };
 
     return (
@@ -368,8 +444,14 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                     {routeCoords.length > 0 && (
                         <Polyline coordinates={routeCoords} strokeWidth={4} strokeColor={Colors.primary} />
                     )}
-                    {driverLoc && (rideStatus === 'accepted' || rideStatus === 'arrived' || rideStatus === 'in_progress') && (
-                        <Marker coordinate={driverLoc} title="Driver" image={require('../../../assets/icon.png')} />
+                    {driverLoc && ['accepted', 'arrived', 'in_progress'].includes(rideStatus) && (
+                        <Marker coordinate={driverLoc} title="Driver" pinColor={Colors.primary} />
+                    )}
+                    {pickupCoords && (
+                        <Marker coordinate={pickupCoords} title="Pickup" pinColor="green" />
+                    )}
+                    {destCoords && (
+                        <Marker coordinate={destCoords} title="Destination" pinColor="red" />
                     )}
                 </MapView>
             </View>
@@ -418,13 +500,13 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                 )}
 
                 {/* 3. ACTIVE RIDE STATUS PANEL */}
-                {(rideStatus === 'searching' || rideStatus === 'accepted' || rideStatus === 'arrived' || rideStatus === 'in_progress') && (
+                {!['idle', 'preview', 'completed', 'cancelled'].includes(rideStatus) && (
                     <View style={styles.rideIsland}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                             <View>
                                 <Text style={styles.tripLabel}>Trip Details:</Text>
-                                <View style={styles.tripRow}><Ionicons name="location-outline" size={16} color={Colors.primary} /><Text style={styles.tripText} numberOfLines={1}>{pickup || rideInfo?.pickup_location}</Text></View>
-                                <View style={styles.tripRow}><Ionicons name="flag-outline" size={16} color="red" /><Text style={styles.tripText} numberOfLines={1}>{destination || rideInfo?.destination}</Text></View>
+                                <View style={styles.tripRow}><Ionicons name="location-outline" size={16} color={Colors.primary} /><Text style={styles.tripText} numberOfLines={1}>{pickup || rideInfo?.pickup_location || 'Trip in Progress'}</Text></View>
+                                <View style={styles.tripRow}><Ionicons name="flag-outline" size={16} color="red" /><Text style={styles.tripText} numberOfLines={1}>{destination || rideInfo?.destination || '...'}</Text></View>
                             </View>
 
                             {/* Cancel Button - Only if not completed */}
@@ -451,8 +533,13 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                         ) : (
                             <View>
                                 <View style={styles.statusRow}>
-                                    <Text style={styles.statusBadge}>{rideStatus.toUpperCase().replace('_', ' ')}</Text>
-                                    <Text style={styles.timeText}>{rideStatus === 'in_progress' ? 'Trip in Progress' : 'Arriving Soon'}</Text>
+                                    <View style={styles.statusBadge}>
+                                        <Text style={styles.statusBadgeText}>{(rideStatus || 'ACTIVE').toUpperCase().replace('_', ' ')}</Text>
+                                    </View>
+                                    <Text style={styles.timeText}>
+                                        {rideStatus === 'in_progress' ? 'Trip in Progress' :
+                                            rideStatus === 'arrived' ? 'Driver Arrived' : 'Arriving Soon'}
+                                    </Text>
                                 </View>
 
                                 <View style={styles.driverRow}>
@@ -468,7 +555,9 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
 
                                     <View style={{ flex: 1, marginLeft: 10 }}>
                                         <Text style={styles.driverName}>{rideInfo?.driver_name || "Unknown Driver"}</Text>
-                                        {rideInfo?.driver_phone && <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>{rideInfo.driver_phone}</Text>}
+                                        <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>
+                                            {rideInfo?.driver_phone || "No Phone Number"}
+                                        </Text>
                                         <Text style={styles.carInfo}>
                                             {rideInfo?.car_color} {rideInfo?.car_model}
                                         </Text>
@@ -513,6 +602,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                 </TouchableOpacity>
             )}
 
+            {/* @ts-ignore */}
             <Animated.View style={[styles.drawer, { transform: [{ translateX: slideAnim }] }]}>
                 {/* ... Drawer Content ... */}
                 <View style={styles.drawerHeader}>
@@ -573,7 +663,8 @@ const styles = StyleSheet.create({
 
     islandTitle: { fontSize: 18, fontWeight: 'bold', marginTop: 10 },
     statusRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
-    statusBadge: { backgroundColor: Colors.primary, color: 'white', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 5, fontWeight: 'bold', fontSize: 12 },
+    statusBadge: { backgroundColor: Colors.primary, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 5 },
+    statusBadgeText: { color: 'white', fontWeight: 'bold', fontSize: 12 },
     timeText: { fontWeight: 'bold', color: Colors.gray },
     driverRow: { flexDirection: 'row', alignItems: 'center' },
     avatarPlaceholder: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' },

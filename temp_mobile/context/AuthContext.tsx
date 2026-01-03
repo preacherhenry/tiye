@@ -51,6 +51,33 @@ export const AuthProvider = ({ children }: any) => {
         }
     };
 
+    // Heartbeat for drivers
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+
+        if (user && user.role === 'driver' && token) {
+            // console.log('💓 Starting driver heartbeat...');
+            const sendHeartbeat = () => {
+                api.post('/driver/heartbeat').catch(err => {
+                    // console.error('Heartbeat fail:', err.message);
+                });
+            };
+
+            // Send immediately
+            sendHeartbeat();
+
+            // Set interval
+            interval = setInterval(sendHeartbeat, 10000);
+        }
+
+        return () => {
+            if (interval) {
+                // console.log('💓 Stopping driver heartbeat');
+                clearInterval(interval);
+            }
+        };
+    }, [user, token]);
+
     const login = async (email: string, password: string) => {
         try {
             const response = await api.post('/login', { email, password });
@@ -97,10 +124,18 @@ export const AuthProvider = ({ children }: any) => {
     };
 
     const logout = async () => {
-        setToken(null);
-        setUser(null);
-        await SecureStore.deleteItemAsync('token');
-        await SecureStore.deleteItemAsync('user');
+        try {
+            // Call backend to update is_online status
+            await api.post('/logout');
+        } catch (error) {
+            console.error('Logout API error:', error);
+        } finally {
+            // Always clear local state
+            setToken(null);
+            setUser(null);
+            await SecureStore.deleteItemAsync('token');
+            await SecureStore.deleteItemAsync('user');
+        }
     };
 
     return (

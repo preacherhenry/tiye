@@ -1,0 +1,49 @@
+Users columns:
+ - id
+ - name
+ - phone
+ - email
+ - password
+ - role
+ - status
+ - created_at
+ - car_model
+ - car_color
+ - plate_number
+ - profile_photo
+ - current_lat
+ - current_lng
+
+Checking 'drivers' table...
+Drivers columns:
+ - id
+ - user_id
+ - car_model
+ - car_color
+ - plate_number
+ - rating
+ - is_online
+
+Checking 'driver_applications' table...
+Application columns:
+ - id
+ - full_name
+ - phone
+ - email
+ - national_id
+ - drivers_license_number
+ - license_expiry_date
+ - vehicle_type
+ - vehicle_registration_number
+ - vehicle_color
+ - driving_experience_years
+ - license_document
+ - national_id_document
+ - vehicle_registration_document
+ - profile_photo
+ - status
+ - rejection_reason
+ - reviewed_by
+ - reviewed_at
+ - created_at
+ - updated_at
