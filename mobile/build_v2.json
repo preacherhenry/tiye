@@ -1,0 +1,53 @@
+﻿[
+  {
+    "id": "ffe5a306-9e93-4137-bb8b-270e446b3531",
+    "status": "ERRORED",
+    "platform": "ANDROID",
+    "error": {
+      "errorCode": "EAS_BUILD_UNKNOWN_GRADLE_ERROR",
+      "message": "Gradle build failed with unknown error. See logs for the \"Run gradlew\" phase for more information."
+    },
+    "artifacts": {},
+    "fingerprint": {
+      "id": "019b9c55-75ed-7d51-bc82-29f494e84c31",
+      "hash": "f93ca83e6a06ae6574ccdc6d81df4e492005680a"
+    },
+    "initiatingActor": {
+      "id": "9bdac8db-3a77-43a6-8a35-41e8224f0110",
+      "displayName": "tiye"
+    },
+    "logFiles": [
+      "https://job-logs.eascdn.net/production/ffe5a306-9e93-4137-bb8b-270e446b3531/1767854405362-dd43caed-a433-4d58-931d-eef442ca1f8e.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260108%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260108T084818Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=64a63550eb7e0b08fe625cc764d9fef5acd159ad5fdf7bba6141446da284c61708134a5a08212440451a83cb5d22cadddef888e8f05a11b25f0271622bd6f83c13c3f4cc446acefed172c4564bf2a75ada27b308660139b7fa32f0802db5e11eadd3b7438d131f7e2b1936138e6e7ca7003e9e2d07f3c16ca82d47d3957fcd5d13f12ede0848c2f2080ce361dd276efa18fed8d07e94af5848507f3605ed763d8dfba94d5600bb88608f64abecd730804c41e391b9c6839d3d5196a13bf110640bc9e638ba5a66e464888d3fb21e5e6d6952ce5c75f6b6c1d5df9360e06480d0cd5714d3278772e56749567896eaad0baf08b6c407d90405907957b09e036282",
+      "https://job-logs.eascdn.net/production/ffe5a306-9e93-4137-bb8b-270e446b3531/1767854407438-3098ce92-698d-41a5-983f-8ded7e492af9.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260108%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260108T084818Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=b79ba60bb19ae3b0ec23153db30e13d064eefae53881d04918c0a9f3eac8a6cc4b092745f9c096829a52cc489731bc4cc9939a3fa752482dd54bdd378f4cdb7dbfa60e794e3a5a689fea2bab4da224191f7695236ffd8aa9883f9427866e21ccafb2c7354d45520463a74d28a3e44ba90ca8d6f5046e0894ad20783aea3f0ff369b75e174b8d11956fedcec18e23ff66513ff06e90aa00d8f7c83e8888c8767daa8b983e86a541a9678edf36ecc1c15e4fee2de02abc3e5fb4c849c1b46dbde8c353429e0067f26be859d99a37228351d8b43f527595dd601187c2a633aac8821511777eeb619b492b9f7cf0be98454476d40954fa1be96756c42c36ea362ae5",
+      "https://job-logs.eascdn.net/production/ffe5a306-9e93-4137-bb8b-270e446b3531/1767854407700-5b74cc12-7006-4a56-8526-d8a0c9d98331.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260108%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260108T084818Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=e0c60c39ac8b7f9dad0d24d2df844055a1bcb6da801dacc1c124d0ea88a36d6943f40e25ff8ce10898b8181b5aaed4fc2b253ea5cba7fc071deeacde42294f3fc72dac7033aabef78e6d596ed59bc27e959ac311e5eea4b68fee42211404d80452d4d40630f707215c6ad84e56a88fe342f18e42ed8509f754c0be212a9520b78ee5121ac19c4ee5a514366c7fe7b0e5c94c78e41f98dac0451dc1b27abc54a1f905abfa0b431962abced5c9e290c7e7c018e76c4fa411d4743b722bba7bba8ae9d635e3b84e20184149a632746d6b405f425420e69f2205f23e6ebd94b5cd383af0dfe495eed8122ad918de4f68c35e93800b7d080a2849ef8666ea77c93172",
+      "https://job-logs.eascdn.net/production/ffe5a306-9e93-4137-bb8b-270e446b3531/1767854407869-3eeaf506-f311-4508-98ac-88f134fd7dce.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260108%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260108T084818Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=17514925926559c0914e75d3b8c9a8c70bc60d0267631018caf719d58e49f293c684b799d7ff150490875eccfbb56cdbe3088e97727babf178bef3518ae1b633bcd3039a179d1b84f83fd0d1f9b969e3b67e62a9f648eaaecbe65d67382805218397dd68e203d066559febc7e9128b58ff7cb7f7a096b2b94b68fa8ec629725abe2903cb73792e9d4862c543b0a2686c807bf10e5dfbcb52068e1f83c50231f197eb1e8ad4a7af278686a3129481c57b1356e3a51ae5a476b69f6d455884a5a5847b9bcb0eee542055412d69e58da6eb78d9cf8fadcb61596197828bc2b024809bf2dc7b7f6d18c56da7abb5135134af11e13727d8bb117b1b301e10b98abd7d"
+    ],
+    "project": {
+      "id": "21f28f4e-8cc4-4ed8-b323-a0b6fcec408c",
+      "name": "tiye",
+      "slug": "tiye",
+      "ownerAccount": {
+        "id": "c82138d5-ac6c-4512-8f29-f94196a2c0e0",
+        "name": "tiye"
+      }
+    },
+    "distribution": "INTERNAL",
+    "buildProfile": "preview",
+    "sdkVersion": "54.0.0",
+    "appVersion": "1.0.0",
+    "appBuildVersion": "1",
+    "gitCommitHash": "8ead37fbb6f90842dce7b2334a18b5fbd9bb4e4a",
+    "gitCommitMessage": "Initial commit with updated icons and driver docs",
+    "priority": "NORMAL",
+    "createdAt": "2026-01-08T06:40:05.016Z",
+    "updatedAt": "2026-01-08T06:46:14.927Z",
+    "completedAt": "2026-01-08T06:46:10.396Z",
+    "expirationDate": "2026-01-22T06:40:05.069Z",
+    "isForIosSimulator": false,
+    "metrics": {
+      "buildWaitTime": 203,
+      "buildQueueTime": 42988,
+      "buildDuration": 321906
+    }
+  }
+]

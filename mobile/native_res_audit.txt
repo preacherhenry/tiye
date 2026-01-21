@@ -1,0 +1,63 @@
+﻿
+android\app\src\main\
+res\drawable\ic_launc
+her_background.xml:2:
+  <item android:drawa
+ble="@color/splashscr
+een_background"/>
+android\app\src\main\
+res\drawable\ic_launc
+her_background.xml:4:
+    <bitmap android:g
+ravity="center" andro
+id:src="@drawable/spl
+ashscreen_logo"/>
+android\app\src\main\
+res\values\colors.xml
+:2:  <color name="spl
+ashscreen_background"
+>#000000</color>
+android\app\src\main\
+res\values\strings.xm
+l:3:  <string name="e
+xpo_splash_screen_res
+ize_mode" translatabl
+e="false">contain</st
+ring>
+android\app\src\main\
+res\values\strings.xm
+l:4:  <string name="e
+xpo_splash_screen_sta
+tus_bar_translucent" 
+translatable="false">
+false</string>
+android\app\src\main\
+res\values\styles.xml
+:6:    <item name="an
+droid:statusBarColor"
+>#ffffff</item>
+android\app\src\main\
+res\values\styles.xml
+:8:  <style name="The
+me.App.SplashScreen" 
+parent="AppTheme">
+android\app\src\main\
+AndroidManifest.xml:2
+3:    <activity andro
+id:name=".MainActivit
+y" android:configChan
+ges="keyboard|keyboar
+dHidden|orientation|s
+creenSize|screenLayou
+t|uiMode" android:lau
+nchMode="singleTask" 
+android:windowSoftInp
+utMode="adjustResize"
+ android:theme="@styl
+e/Theme.App.SplashScr
+een" android:exported
+="true" android:scree
+nOrientation="portrai
+t">
+
+

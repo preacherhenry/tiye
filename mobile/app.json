@@ -1,0 +1,83 @@
+{
+  "expo": {
+    "name": "Tiye",
+    "slug": "tiye",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon1.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tiye.app",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "audio",
+          "location",
+          "fetch"
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#000000"
+      },
+      "package": "com.tiye.app",
+      "versionCode": 1,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBqhp-lN1dBBQaIxm-YPHgbZHRrpSvR9p4"
+        }
+      },
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Tiye to use your location."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you set your profile picture."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      "expo-audio",
+      "expo-font",
+      "expo-asset"
+    ],
+    "extra": {
+      "apiUrl": "http://10.186.157.9:5000",
+      "socketUrl": "ws://10.186.157.9:5000",
+      "eas": {
+        "projectId": "21f28f4e-8cc4-4ed8-b323-a0b6fcec408c"
+      }
+    },
+    "owner": "tiye"
+  }
+}
