@@ -1,8 +1,20 @@
-node_modules
-dist
-.env
-firebase-adminsdk.json
-request_logs.txt
-taxi_web_admin/node_modules
-taxi_web_admin/dist
+# Backend
+backend/node_modules
+backend/dist
+backend/.env
+backend/firebase-adminsdk.json
+backend/request_logs.txt
+backend/taxi_web_admin/node_modules
+backend/taxi_web_admin/dist
 .firebase
+
+# Mobile
+mobile/node_modules
+mobile/.expo
+mobile/web-build
+mobile/dist
+mobile/builds
+mobile/npm-debug.log*
+mobile/yarn-debug.log*
+mobile/yarn-error.log*
+mobile/.env

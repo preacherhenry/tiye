@@ -1,6 +1,6 @@
 {
     "hosting": {
-        "public": "taxi_web_admin/dist",
+        "public": "backend/taxi_web_admin/dist",
         "ignore": [
             "firebase.json",
             "**/.*",
