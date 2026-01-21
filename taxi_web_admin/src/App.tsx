@@ -8,11 +8,15 @@ import ApplicationDetail from './pages/ApplicationDetail';
 import Analytics from './pages/Analytics';
 import Drivers from './pages/Drivers';
 import DriverProfile from './pages/DriverProfile';
+import DriverSubscriptions from './pages/DriverSubscriptions';
 import Passengers from './pages/Passengers';
 import PassengerProfile from './pages/PassengerProfile';
 import TripDetails from './pages/TripDetails';
 import AdminPanel from './pages/AdminPanel';
 import Settings from './pages/Settings';
+import Promotions from './pages/Promotions';
+import Subscriptions from './pages/Subscriptions';
+import Fares from './pages/Fares';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -54,9 +58,13 @@ const App: React.FC = () => {
             <Route path="analytics" element={<Analytics />} />
             <Route path="drivers" element={<Drivers />} />
             <Route path="drivers/:id" element={<DriverProfile />} />
+            <Route path="drivers/:id/subscriptions" element={<DriverSubscriptions />} />
             <Route path="passengers" element={<Passengers />} />
             <Route path="passengers/:id" element={<PassengerProfile />} />
             <Route path="trips/:id" element={<TripDetails />} />
+            <Route path="promotions" element={<Promotions />} />
+            <Route path="subscriptions" element={<Subscriptions />} />
+            <Route path="fares" element={<Fares />} />
             <Route path="settings" element={<Settings />} />
           </Route>
           <Route

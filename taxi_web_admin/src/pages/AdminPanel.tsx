@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import {
     ShieldCheck,
     UserPlus,
@@ -11,7 +12,9 @@ import {
     Eye,
     EyeOff,
     CheckCircle2,
-    XCircle
+    XCircle,
+    Ban,
+    CheckCircle
 } from 'lucide-react';
 
 interface Admin {
@@ -21,10 +24,13 @@ interface Admin {
     phone: string;
     role: 'admin' | 'super_admin';
     is_online: boolean;
+    status: 'active' | 'suspended';
+    profile_photo?: string;
     created_at: string;
 }
 
 const AdminPanel: React.FC = () => {
+    const { user } = useAuth();
     const [admins, setAdmins] = useState<Admin[]>([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -78,6 +84,19 @@ const AdminPanel: React.FC = () => {
         }
     };
 
+    const handleToggleStatus = async (id: number, currentStatus: string) => {
+        const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
+        if (!window.confirm(`Are you sure you want to ${newStatus === 'active' ? 'enable' : 'disable'} this admin?`)) return;
+
+        try {
+            await api.post(`/admin/admins/${id}/status`, { status: newStatus });
+            fetchAdmins();
+        } catch (error: any) {
+            console.error('Failed to update status:', error);
+            alert(error.response?.data?.message || 'Failed to update status');
+        }
+    };
+
     if (loading) {
         return (
             <div className="p-20 text-center text-gray-400 flex flex-col items-center justify-center space-y-4">
@@ -126,8 +145,22 @@ const AdminPanel: React.FC = () => {
                                 <tr key={admin.id} className="group hover:bg-white/[0.02] transition-colors">
                                     <td className="py-6">
                                         <div className="flex items-center">
-                                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-sm font-black mr-4 border border-primary/20 shadow-lg shadow-primary/10">
-                                                {admin.name.charAt(0)}
+                                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-sm font-black mr-4 border border-primary/20 shadow-lg shadow-primary/10 overflow-hidden">
+                                                {admin.profile_photo ? (
+                                                    <img
+                                                        src={admin.profile_photo}
+                                                        alt={admin.name}
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e) => {
+                                                            (e.target as HTMLImageElement).style.display = 'none';
+                                                            (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    admin.name.charAt(0)
+                                                )}
+                                                {/* Fallback initial if image fails to load (hidden by default if image exists) */}
+                                                {admin.profile_photo && <span className="hidden w-full h-full flex items-center justify-center bg-primary/10 absolute top-0 left-0">{admin.name.charAt(0)}</span>}
                                             </div>
                                             <div>
                                                 <p className="font-bold text-sm tracking-tight">{admin.name}</p>
@@ -141,20 +174,24 @@ const AdminPanel: React.FC = () => {
                                             {admin.phone}
                                         </div>
                                     </td>
+
                                     <td className="py-6">
-                                        <button
-                                            onClick={() => handleUpdateRole(admin.id, admin.role)}
-                                            className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest inline-flex items-center transition-all ${admin.role === 'super_admin'
-                                                ? 'text-primary bg-primary/10 hover:bg-primary/20'
-                                                : 'text-secondary bg-secondary/10 hover:bg-secondary/20'
-                                                }`}
-                                        >
-                                            {admin.role === 'super_admin' ? (
-                                                <><Shield className="w-3 h-3 mr-1" /> Super Admin</>
-                                            ) : (
-                                                <><ShieldAlert className="w-3 h-3 mr-1" /> Admin</>
-                                            )}
-                                        </button>
+                                        <div className="flex items-center space-x-2">
+                                            <button
+                                                onClick={() => handleUpdateRole(admin.id, admin.role)}
+                                                disabled={user?.role !== 'super_admin' || user?.id === admin.id}
+                                                className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest inline-flex items-center transition-all ${admin.role === 'super_admin'
+                                                    ? 'text-primary bg-primary/10 hover:bg-primary/20'
+                                                    : 'text-secondary bg-secondary/10 hover:bg-secondary/20'
+                                                    } ${(user?.role !== 'super_admin' || user?.id === admin.id) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            >
+                                                {admin.role === 'super_admin' ? (
+                                                    <><Shield className="w-3 h-3 mr-1" /> Super Admin</>
+                                                ) : (
+                                                    <><ShieldAlert className="w-3 h-3 mr-1" /> Admin</>
+                                                )}
+                                            </button>
+                                        </div>
                                     </td>
                                     <td className="py-6">
                                         <div
@@ -177,9 +214,26 @@ const AdminPanel: React.FC = () => {
                                         </div>
                                     </td>
                                     <td className="py-6 text-right">
-                                        <div className="text-xs text-gray-500 italic">
-                                            Automatic
-                                        </div>
+                                        {user?.role === 'super_admin' ? (
+                                            <button
+                                                onClick={() => handleToggleStatus(admin.id, admin.status)}
+                                                disabled={user?.id === admin.id}
+                                                className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest inline-flex items-center transition-all ${admin.status === 'active'
+                                                    ? 'text-red-500 bg-red-500/10 hover:bg-red-500/20'
+                                                    : 'text-green-500 bg-green-500/10 hover:bg-green-500/20'
+                                                    } ${user?.id === admin.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            >
+                                                {admin.status === 'active' ? (
+                                                    <><Ban className="w-3 h-3 mr-1" /> Disable</>
+                                                ) : (
+                                                    <><CheckCircle className="w-3 h-3 mr-1" /> Enable</>
+                                                )}
+                                            </button>
+                                        ) : (
+                                            <div className="text-xs text-gray-500 italic">
+                                                Restricted
+                                            </div>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
@@ -189,121 +243,123 @@ const AdminPanel: React.FC = () => {
             </div>
 
             {/* Create Admin Modal */}
-            {showModal && (
-                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="glass p-8 rounded-[2rem] max-w-md w-full border border-white/10 relative">
-                        <button
-                            onClick={() => setShowModal(false)}
-                            className="absolute top-6 right-6 p-2 hover:bg-white/5 rounded-lg transition-all"
-                        >
-                            <X className="w-5 h-5 text-gray-500" />
-                        </button>
+            {
+                showModal && (
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                        <div className="glass p-8 rounded-[2rem] max-w-md w-full border border-white/10 relative">
+                            <button
+                                onClick={() => setShowModal(false)}
+                                className="absolute top-6 right-6 p-2 hover:bg-white/5 rounded-lg transition-all"
+                            >
+                                <X className="w-5 h-5 text-gray-500" />
+                            </button>
 
-                        <h3 className="text-2xl font-bold mb-6 flex items-center">
-                            <UserPlus className="w-6 h-6 mr-3 text-primary" />
-                            Add New Administrator
-                        </h3>
+                            <h3 className="text-2xl font-bold mb-6 flex items-center">
+                                <UserPlus className="w-6 h-6 mr-3 text-primary" />
+                                Add New Administrator
+                            </h3>
 
-                        <form onSubmit={handleCreateAdmin} className="space-y-6">
-                            <div>
-                                <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-2">
-                                    Full Name
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-primary transition-all"
-                                    required
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-2">
-                                    Email Address
-                                </label>
-                                <input
-                                    type="email"
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-primary transition-all"
-                                    required
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-2">
-                                    Phone Number
-                                </label>
-                                <input
-                                    type="tel"
-                                    value={formData.phone}
-                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-primary transition-all"
-                                    required
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-2">
-                                    Password
-                                </label>
-                                <div className="relative">
+                            <form onSubmit={handleCreateAdmin} className="space-y-6">
+                                <div>
+                                    <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-2">
+                                        Full Name
+                                    </label>
                                     <input
-                                        type={showPassword ? 'text' : 'password'}
-                                        value={formData.password}
-                                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:border-primary transition-all"
+                                        type="text"
+                                        value={formData.name}
+                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-primary transition-all"
                                         required
                                     />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-2">
+                                        Email Address
+                                    </label>
+                                    <input
+                                        type="email"
+                                        value={formData.email}
+                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-primary transition-all"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-2">
+                                        Phone Number
+                                    </label>
+                                    <input
+                                        type="tel"
+                                        value={formData.phone}
+                                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-primary transition-all"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-2">
+                                        Password
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            type={showPassword ? 'text' : 'password'}
+                                            value={formData.password}
+                                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:border-primary transition-all"
+                                            required
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-2 hover:bg-white/5 rounded-lg transition-all"
+                                        >
+                                            {showPassword ? (
+                                                <EyeOff className="w-4 h-4 text-gray-500" />
+                                            ) : (
+                                                <Eye className="w-4 h-4 text-gray-500" />
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-2">
+                                        Access Level
+                                    </label>
+                                    <select
+                                        value={formData.role}
+                                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-primary transition-all"
+                                    >
+                                        <option value="admin">Admin</option>
+                                        <option value="super_admin">Super Admin</option>
+                                    </select>
+                                </div>
+
+                                <div className="flex space-x-4 pt-4">
                                     <button
                                         type="button"
-                                        onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 p-2 hover:bg-white/5 rounded-lg transition-all"
+                                        onClick={() => setShowModal(false)}
+                                        className="flex-1 px-6 py-3 bg-white/5 text-gray-400 font-bold rounded-xl hover:bg-white/10 transition-all"
                                     >
-                                        {showPassword ? (
-                                            <EyeOff className="w-4 h-4 text-gray-500" />
-                                        ) : (
-                                            <Eye className="w-4 h-4 text-gray-500" />
-                                        )}
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="flex-1 px-6 py-3 bg-primary text-black font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+                                    >
+                                        Create Admin
                                     </button>
                                 </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-black uppercase tracking-widest text-gray-500 mb-2">
-                                    Access Level
-                                </label>
-                                <select
-                                    value={formData.role}
-                                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-primary transition-all"
-                                >
-                                    <option value="admin">Admin</option>
-                                    <option value="super_admin">Super Admin</option>
-                                </select>
-                            </div>
-
-                            <div className="flex space-x-4 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowModal(false)}
-                                    className="flex-1 px-6 py-3 bg-white/5 text-gray-400 font-bold rounded-xl hover:bg-white/10 transition-all"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 px-6 py-3 bg-primary text-black font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
-                                >
-                                    Create Admin
-                                </button>
-                            </div>
-                        </form>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 

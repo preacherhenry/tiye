@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogIn, Loader2 } from 'lucide-react';
+import logo from '../assets/tiye_logo.png';
 
 const Login: React.FC = () => {
     const [email, setEmail] = useState('');
@@ -33,12 +34,10 @@ const Login: React.FC = () => {
 
                 <div className="relative">
                     <div className="flex justify-center mb-6">
-                        <div className="p-3 bg-primary/10 rounded-xl">
-                            <LogIn className="w-8 h-8 text-primary" />
-                        </div>
+                        <img src={logo} alt="Tiye Taxi Logo" className="w-24 h-24 object-contain" />
                     </div>
 
-                    <h1 className="text-3xl font-bold text-center mb-2">Tiye Admin</h1>
+                    <h1 className="text-3xl font-bold text-center mb-2">Tiye Taxi</h1>
                     <p className="text-gray-400 text-center mb-8">Secure platform operations</p>
 
                     {error && (

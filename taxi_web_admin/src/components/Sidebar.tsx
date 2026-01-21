@@ -9,7 +9,10 @@ import {
     ShieldCheck,
     LayoutDashboard,
     XCircle,
-    User
+    User,
+    Tag,
+    CreditCard,
+    Map
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -23,6 +26,9 @@ const Sidebar: React.FC = () => {
         { icon: Users, label: 'Drivers', path: '/drivers' },
         { icon: User, label: 'Passengers', path: '/passengers' },
         { icon: BarChart3, label: 'Analytics', path: '/analytics' },
+        { icon: Tag, label: 'Promotions', path: '/promotions' },
+        { icon: CreditCard, label: 'Subscriptions', path: '/subscriptions' },
+        { icon: Map, label: 'Fares', path: '/fares' },
     ];
 
     if (user?.role === 'super_admin') {

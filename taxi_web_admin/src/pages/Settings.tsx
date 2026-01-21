@@ -16,7 +16,9 @@ import {
     Clock,
     Monitor,
     Moon,
-    Sun
+    Sun,
+    DollarSign,
+    Milestone
 } from 'lucide-react';
 
 interface LoginHistoryItem {
@@ -58,6 +60,7 @@ const Settings: React.FC = () => {
             setAvatarPreview(user.profile_photo || null);
         }
         fetchLoginHistory();
+        fetchLoginHistory();
 
         // Load theme from localStorage
         const savedTheme = localStorage.getItem('admin_theme') as 'dark' | 'light' || 'dark';
@@ -75,6 +78,7 @@ const Settings: React.FC = () => {
             console.error('Failed to fetch login history:', error);
         }
     };
+
 
     const handleProfileUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -437,6 +441,7 @@ const Settings: React.FC = () => {
                     </div>
                 </div>
             </div>
+
 
             {/* Login Activity */}
             <div className="glass p-8 rounded-[2rem] border border-white/5">

@@ -1,14 +1,13 @@
 import { Request, Response } from 'express';
-import pool from '../config/db';
-import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { db } from '../config/firebase';
 import bcrypt from 'bcryptjs';
+import { checkOfflineStatus } from './driverController';
 
 const fixUrl = (url: string | null, req: Request) => {
     if (!url) return null;
     if (url.startsWith('http')) {
         const host = req.get('host') || 'localhost:5000';
         const fixed = url.replace(/(http:\/\/|https:\/\/)(localhost|127\.0\.0\.1)(:\d+)?/g, `${req.protocol}://${host}`);
-        console.log(`[fixUrl] In: ${url} | Out: ${fixed}`);
         return fixed;
     }
     return url;
@@ -16,19 +15,24 @@ const fixUrl = (url: string | null, req: Request) => {
 
 export const getPendingApplications = async (req: Request, res: Response) => {
     try {
-        const [rows] = await pool.execute<RowDataPacket[]>(`
-            SELECT da.*, u.name as user_name, u.profile_photo as user_avatar
-            FROM driver_applications da
-            JOIN users u ON da.user_id = u.id
-            WHERE da.status = "pending" OR da.status = "resubmitted"
-        `);
+        const querySnapshot = await db.collection('driver_applications')
+            .where('status', 'in', ['pending', 'resubmitted'])
+            .get();
 
-        const fixedApplications = rows.map(app => ({
-            ...app,
-            user_avatar: fixUrl(app.user_avatar, req)
+        const applications = await Promise.all(querySnapshot.docs.map(async (doc) => {
+            const app = doc.data();
+            const userDoc = await db.collection('users').doc(app.user_id).get();
+            const userData = userDoc.data() || {};
+
+            return {
+                ...app,
+                id: doc.id,
+                user_name: userData.name,
+                user_avatar: fixUrl(userData.profile_photo, req)
+            };
         }));
 
-        res.json({ success: true, applications: fixedApplications });
+        res.json({ success: true, applications });
     } catch (error: any) {
         res.json({ success: false, message: error.message });
     }
@@ -37,20 +41,23 @@ export const getPendingApplications = async (req: Request, res: Response) => {
 export const getApplicationDetails = async (req: Request, res: Response) => {
     const { id } = req.params;
     try {
-        const [appRows] = await pool.execute<RowDataPacket[]>('SELECT * FROM driver_applications WHERE id = ?', [id]);
-        if (appRows.length === 0) return res.json({ success: false, message: 'Application not found' });
+        const appDoc = await db.collection('driver_applications').doc(id).get();
+        if (!appDoc.exists) return res.json({ success: false, message: 'Application not found' });
 
-        const [docRows] = await pool.execute<RowDataPacket[]>('SELECT * FROM driver_documents WHERE application_id = ?', [id]);
+        const docSnapshot = await db.collection('driver_documents')
+            .where('application_id', '==', id)
+            .get();
 
-        const fixedDocs = docRows.map(doc => ({
-            ...doc,
-            file_path: fixUrl(doc.file_path, req)
+        const documents = docSnapshot.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id,
+            file_path: fixUrl(doc.data().file_path, req)
         }));
 
         res.json({
             success: true,
-            application: appRows[0],
-            documents: fixedDocs
+            application: { ...appDoc.data(), id: appDoc.id },
+            documents
         });
     } catch (error: any) {
         res.json({ success: false, message: error.message });
@@ -63,16 +70,22 @@ export const verifyDocument = async (req: Request, res: Response) => {
     const adminId = (req as any).user?.id || null;
 
     try {
-        await pool.execute(
-            'UPDATE driver_documents SET verification_status = ?, rejection_reason = ?, verified_by = ?, verified_at = NOW() WHERE id = ?',
-            [status, reason || null, adminId, docId]
-        );
+        const docRef = db.collection('driver_documents').doc(docId);
+        await docRef.update({
+            verification_status: status,
+            rejection_reason: reason || null,
+            verified_by: adminId,
+            verified_at: new Date().toISOString()
+        });
 
         // Log to document_audit_logs
-        await pool.execute(
-            'INSERT INTO document_audit_logs (document_id, admin_id, action, notes) VALUES (?, ?, ?, ?)',
-            [docId, adminId, status === 'verified' ? 'verify' : 'reject', reason || null]
-        );
+        await db.collection('document_audit_logs').add({
+            document_id: docId,
+            admin_id: adminId,
+            action: status === 'verified' ? 'verify' : 'reject',
+            notes: reason || null,
+            timestamp: new Date().toISOString()
+        });
 
         res.json({ success: true, message: `Document ${status}` });
     } catch (error: any) {
@@ -85,54 +98,74 @@ export const approveApplication = async (req: Request, res: Response) => {
     const adminId = (req as any).user?.id || null;
 
     try {
-        // 1. Get application details
-        const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM driver_applications WHERE id = ?', [id]);
-        if (rows.length === 0) {
-            return res.json({ success: false, message: 'Application not found' });
+        const result = await db.runTransaction(async (transaction) => {
+            const appRef = db.collection('driver_applications').doc(id);
+            const appDoc = await transaction.get(appRef);
+
+            if (!appDoc.exists) {
+                throw new Error('Application not found');
+            }
+            const app = appDoc.data()!;
+
+            // 2. Find user
+            const userRef = db.collection('users').doc(app.user_id);
+            const userDoc = await transaction.get(userRef);
+            if (!userDoc.exists) {
+                throw new Error('Associated user account not found');
+            }
+
+            // 3. CHECK if all required documents are verified
+            const docsSnapshot = await db.collection('driver_documents')
+                .where('application_id', '==', id)
+                .get();
+
+            const unverified = docsSnapshot.docs.filter(d => d.data().verification_status !== 'verified');
+            if (unverified.length > 0) {
+                return { success: false, message: 'Cannot approve: All documents must be verified first.' };
+            }
+
+            // 4. Update application status
+            transaction.update(appRef, {
+                status: 'approved',
+                reviewed_by: adminId,
+                reviewed_at: new Date().toISOString()
+            });
+
+            // 5. Update user status
+            transaction.update(userRef, { status: 'approved' });
+
+            // 6. Create/Update driver record
+            const driverRef = db.collection('drivers').doc(app.user_id);
+            transaction.set(driverRef, {
+                user_id: app.user_id,
+                car_model: app.vehicle_type + ' ' + app.vehicle_registration_number,
+                car_color: app.vehicle_color,
+                plate_number: app.vehicle_registration_number,
+                rating: 5.0,
+                online_status: 'offline',
+                is_online: false,
+                subscription_status: 'none'
+            }, { merge: true });
+
+            // 7. Log the overall approval
+            const auditRef = db.collection('audit_logs').doc();
+            transaction.set(auditRef, {
+                user_id: adminId,
+                action: 'approve_driver_application',
+                target_type: 'driver_application',
+                target_id: id,
+                details: JSON.stringify({ userId: app.user_id, email: app.email }),
+                timestamp: new Date().toISOString()
+            });
+
+            return { success: true };
+        });
+
+        if (result.success) {
+            res.json({ success: true, message: 'Application approved' });
+        } else {
+            res.json(result);
         }
-        const app = rows[0];
-
-        // 2. Find user by email
-        const [userRows] = await pool.execute<RowDataPacket[]>('SELECT id FROM users WHERE email = ?', [app.email]);
-        if (userRows.length === 0) {
-            return res.json({ success: false, message: 'Associated user account not found' });
-        }
-        const userId = userRows[0].id;
-
-        // 3. CHECK if all required documents are verified
-        const [unverifiedDocs] = await pool.execute<RowDataPacket[]>(
-            'SELECT id FROM driver_documents WHERE application_id = ? AND verification_status != "verified"',
-            [id]
-        );
-
-        if (unverifiedDocs.length > 0) {
-            return res.json({ success: false, message: 'Cannot approve: All documents must be verified first.' });
-        }
-
-        // 4. Update application status
-        await pool.execute(
-            'UPDATE driver_applications SET status = "approved", reviewed_by = ?, reviewed_at = NOW() WHERE id = ?',
-            [adminId, id]
-        );
-
-        // 4. Update user status
-        await pool.execute('UPDATE users SET status = "approved" WHERE id = ?', [userId]);
-
-        // 5. Create/Update driver record
-        await pool.execute(
-            `INSERT INTO drivers (user_id, car_model, car_color, plate_number) 
-             VALUES (?, ?, ?, ?) 
-             ON DUPLICATE KEY UPDATE car_model = VALUES(car_model), car_color = VALUES(car_color), plate_number = VALUES(plate_number)`,
-            [userId, app.vehicle_type + ' ' + app.vehicle_registration_number, app.vehicle_color, app.vehicle_registration_number]
-        );
-
-        // 6. Log the overall approval
-        await pool.execute(
-            'INSERT INTO audit_logs (user_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?)',
-            [adminId, 'approve_driver_application', 'driver_application', id, JSON.stringify({ userId, email: app.email })]
-        );
-
-        res.json({ success: true, message: 'Application approved' });
     } catch (error: any) {
         console.error('Approve Error:', error);
         res.json({ success: false, message: error.message });
@@ -145,22 +178,31 @@ export const rejectApplication = async (req: Request, res: Response) => {
     const adminId = (req as any).user?.id || null;
 
     try {
-        const [rows] = await pool.execute<RowDataPacket[]>('SELECT email FROM driver_applications WHERE id = ?', [id]);
-        if (rows.length === 0) return res.json({ success: false, message: 'Application not found' });
-        const email = rows[0].email;
+        const appRef = db.collection('driver_applications').doc(id);
+        const appDoc = await appRef.get();
+        if (!appDoc.exists) return res.json({ success: false, message: 'Application not found' });
+        const app = appDoc.data()!;
 
-        await pool.execute(
-            'UPDATE driver_applications SET status = "rejected", rejection_reason = ?, reviewed_by = ?, reviewed_at = NOW(), rejected_at = NOW() WHERE id = ?',
-            [reason, adminId, id]
-        );
+        await db.runTransaction(async (transaction) => {
+            transaction.update(appRef, {
+                status: 'rejected',
+                rejection_reason: reason,
+                reviewed_by: adminId,
+                reviewed_at: new Date().toISOString(),
+                rejected_at: new Date().toISOString()
+            });
 
-        await pool.execute('UPDATE users SET status = "rejected" WHERE email = ?', [email]);
+            transaction.update(db.collection('users').doc(app.user_id), { status: 'rejected' });
 
-        // Log the overall rejection
-        await pool.execute(
-            'INSERT INTO audit_logs (user_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?)',
-            [adminId, 'reject_driver_application', 'driver_application', id, JSON.stringify({ email, reason })]
-        );
+            transaction.set(db.collection('audit_logs').doc(), {
+                user_id: adminId,
+                action: 'reject_driver_application',
+                target_type: 'driver_application',
+                target_id: id,
+                details: JSON.stringify({ email: app.email, reason }),
+                timestamp: new Date().toISOString()
+            });
+        });
 
         res.json({ success: true, message: 'Application rejected' });
     } catch (error: any) {
@@ -170,19 +212,24 @@ export const rejectApplication = async (req: Request, res: Response) => {
 
 export const getRejectedApplications = async (req: Request, res: Response) => {
     try {
-        const [rows] = await pool.execute<RowDataPacket[]>(`
-            SELECT da.*, u.name as user_name, u.profile_photo as user_avatar
-            FROM driver_applications da
-            JOIN users u ON da.user_id = u.id
-            WHERE da.status = "rejected"
-        `);
+        const querySnapshot = await db.collection('driver_applications')
+            .where('status', '==', 'rejected')
+            .get();
 
-        const fixedApplications = rows.map(app => ({
-            ...app,
-            user_avatar: fixUrl(app.user_avatar, req)
+        const applications = await Promise.all(querySnapshot.docs.map(async (doc) => {
+            const app = doc.data();
+            const userDoc = await db.collection('users').doc(app.user_id).get();
+            const userData = userDoc.data() || {};
+
+            return {
+                ...app,
+                id: doc.id,
+                user_name: userData.name,
+                user_avatar: fixUrl(userData.profile_photo, req)
+            };
         }));
 
-        res.json({ success: true, applications: fixedApplications });
+        res.json({ success: true, applications });
     } catch (error: any) {
         res.json({ success: false, message: error.message });
     }
@@ -190,69 +237,61 @@ export const getRejectedApplications = async (req: Request, res: Response) => {
 
 export const getAnalyticsStats = async (req: Request, res: Response) => {
     try {
-        // 1. Overview Stats
-        const [userStats] = await pool.execute<RowDataPacket[]>('SELECT role, COUNT(*) as count FROM users GROUP BY role');
-        const [rideStats] = await pool.execute<RowDataPacket[]>('SELECT status, COUNT(*) as count, SUM(fare) as revenue FROM ride_requests GROUP BY status');
-        const [appStats] = await pool.execute<RowDataPacket[]>('SELECT status, COUNT(*) as count FROM driver_applications GROUP BY status');
+        // 1. Overview Stats (Fetch all necessary docs for client-side aggregation)
+        // Note: For large datasets, this should use Firebase Extensions for aggregation
+        // but for this migration we will do it in code.
+        const usersSnapshot = await db.collection('users').get();
+        const ridesSnapshot = await db.collection('ride_requests').get();
+        const appSnapshot = await db.collection('driver_applications').get();
 
-        // 2. Daily Growth (Last 7 days)
-        const [growthStats] = await pool.execute<RowDataPacket[]>(`
-            SELECT DATE(created_at) as date, COUNT(*) as count 
-            FROM ride_requests 
-            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-            GROUP BY DATE(created_at)
-            ORDER BY date ASC
-        `);
-
-        // Format user distribution
-        const users = {
-            total: 0,
-            passengers: 0,
-            drivers: 0,
-            admins: 0
-        };
-        userStats.forEach(s => {
-            const count = Number(s.count);
-            users.total += count;
-            if (s.role === 'passenger') users.passengers = count;
-            else if (s.role === 'driver') users.drivers = count;
-            else if (s.role === 'admin' || s.role === 'super_admin') users.admins += count;
+        // 2. Format user distribution
+        const users = { total: usersSnapshot.size, passengers: 0, drivers: 0, admins: 0 };
+        usersSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.role === 'passenger') users.passengers++;
+            else if (data.role === 'driver') users.drivers++;
+            else if (['admin', 'super_admin'].includes(data.role)) users.admins++;
         });
 
-        // Format ride statistics
+        // 3. Format ride statistics & revenue
         let totalRevenue = 0;
-        const rides = {
-            total: 0,
-            completed: 0,
-            cancelled: 0,
-            pending: 0
-        };
-        rideStats.forEach(s => {
-            const count = Number(s.count);
-            rides.total += count;
-            if (s.status === 'completed') {
-                rides.completed = count;
-                totalRevenue = Number(s.revenue || 0);
-            } else if (s.status === 'cancelled') {
-                rides.cancelled = count;
-            } else if (s.status === 'pending' || s.status === 'accepted') {
-                rides.pending += count;
+        const rides = { total: ridesSnapshot.size, completed: 0, cancelled: 0, pending: 0 };
+        const growthTrendMap: { [key: string]: number } = {};
+
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+        ridesSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.status === 'completed') {
+                rides.completed++;
+                totalRevenue += Number(data.fare || 0);
+            } else if (data.status === 'cancelled') {
+                rides.cancelled++;
+            } else if (['pending', 'accepted', 'arrived', 'picked_up'].includes(data.status)) {
+                rides.pending++;
+            }
+
+            // Daily Growth (Last 7 days)
+            const createdAt = new Date(data.created_at);
+            if (createdAt >= sevenDaysAgo) {
+                const dateKey = createdAt.toISOString().split('T')[0];
+                growthTrendMap[dateKey] = (growthTrendMap[dateKey] || 0) + 1;
             }
         });
 
-        // Format application metrics
-        const applications = {
-            total: 0,
-            pending: 0,
-            approved: 0,
-            rejected: 0
-        };
-        appStats.forEach(s => {
-            const count = Number(s.count);
-            applications.total += count;
-            if (s.status === 'pending' || s.status === 'resubmitted') applications.pending += count;
-            else if (s.status === 'approved') applications.approved = count;
-            else if (s.status === 'rejected') applications.rejected = count;
+        const growthTrend = Object.keys(growthTrendMap).sort().map(date => ({
+            date,
+            count: growthTrendMap[date]
+        }));
+
+        // 4. Format application metrics
+        const applications = { total: appSnapshot.size, pending: 0, approved: 0, rejected: 0 };
+        appSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (['pending', 'resubmitted'].includes(data.status)) applications.pending++;
+            else if (data.status === 'approved') applications.approved++;
+            else if (data.status === 'rejected') applications.rejected++;
         });
 
         res.json({
@@ -262,7 +301,7 @@ export const getAnalyticsStats = async (req: Request, res: Response) => {
                 rides,
                 applications,
                 totalRevenue,
-                growthTrend: growthStats
+                growthTrend
             }
         });
     } catch (error: any) {
@@ -275,95 +314,102 @@ export const getDashboardStats = async (req: Request, res: Response) => {
         // Run cleanup
         await checkOfflineStatus();
 
-        // 1. Application Stats
-        const [appStats] = await pool.execute<RowDataPacket[]>('SELECT status, COUNT(*) as count FROM driver_applications GROUP BY status');
+        // Fetch data for dashboard
+        const appSnapshot = await db.collection('driver_applications').get();
+        const usersSnapshot = await db.collection('users').get();
+        const ridesSnapshot = await db.collection('ride_requests').where('status', '==', 'completed').get();
+        const onlineDriversSnapshot = await db.collection('drivers').where('online_status', '!=', 'offline').get();
 
-        // 2. User Stats (Suspended)
-        const [suspendedCount] = await pool.execute<RowDataPacket[]>('SELECT COUNT(*) as count FROM users WHERE status = "suspended"');
+        let revenue = 0;
+        ridesSnapshot.docs.forEach(doc => revenue += Number(doc.data().fare || 0));
 
-        // 3. Recent Activity (Latest 5 applications)
-        const [recentApps] = await pool.execute<RowDataPacket[]>(`
-            SELECT da.*, u.name as user_name, u.profile_photo as user_avatar
-            FROM driver_applications da
-            JOIN users u ON da.user_id = u.id
-            ORDER BY da.created_at DESC
-            LIMIT 5
-        `);
-
-        // 4. Revenue (Total from completed rides)
-        const [revenueRow] = await pool.execute<RowDataPacket[]>('SELECT SUM(fare) as total FROM ride_requests WHERE status = "completed"');
-
-        // 5. Online Drivers
-        const [onlineDriversRow] = await pool.execute<RowDataPacket[]>('SELECT COUNT(*) as count FROM drivers WHERE online_status != "offline"');
-
-        // 6. Total Passengers
-        const [passengersRow] = await pool.execute<RowDataPacket[]>('SELECT COUNT(*) as count FROM users WHERE role = "passenger"');
-
-        // 7. Total Users
-        const [totalUsersRow] = await pool.execute<RowDataPacket[]>('SELECT COUNT(*) as count FROM users');
+        let suspended = 0;
+        let passengers = 0;
+        let approvedDrivers = 0;
+        usersSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.status === 'suspended') suspended++;
+            if (data.role === 'passenger') passengers++;
+            if (data.role === 'driver' && (data.status === 'active' || data.status === 'approved')) approvedDrivers++;
+        });
 
         const stats = {
             pending: 0,
-            approved: 0,
+            approved: approvedDrivers,
             rejected: 0,
-            suspended: Number(suspendedCount[0]?.count || 0),
-            revenue: Number(revenueRow[0]?.total || 0),
-            onlineDrivers: Number(onlineDriversRow[0]?.count || 0),
-            totalPassengers: Number(passengersRow[0]?.count || 0),
-            totalUsers: Number(totalUsersRow[0]?.count || 0)
+            suspended,
+            revenue,
+            onlineDrivers: onlineDriversSnapshot.size,
+            totalPassengers: passengers,
+            totalUsers: usersSnapshot.size
         };
 
-        // Get actual approved/active drivers count
-        const [activeDriversCount] = await pool.execute<RowDataPacket[]>('SELECT COUNT(*) as count FROM users WHERE role = "driver" AND (status = "active" OR status = "approved")');
-
-        appStats.forEach(s => {
-            if (s.status === 'pending' || s.status === 'resubmitted') stats.pending += Number(s.count);
-            else if (s.status === 'rejected') stats.rejected = Number(s.count);
+        appSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (['pending', 'resubmitted'].includes(data.status)) stats.pending++;
+            else if (data.status === 'rejected') stats.rejected++;
         });
 
-        // Override with users table count
-        stats.approved = activeDriversCount[0]?.count || 0;
+        // Recent Activity (Latest 5 applications)
+        const recentAppsSnapshot = await db.collection('driver_applications')
+            .orderBy('created_at', 'desc')
+            .limit(5)
+            .get();
 
-        res.json({
-            success: true,
-            stats,
-            recentActivity: recentApps.map(app => ({
-                id: app.id,
+        const recentActivity = await Promise.all(recentAppsSnapshot.docs.map(async (doc) => {
+            const app = doc.data();
+            const userDoc = await db.collection('users').doc(app.user_id).get();
+            const userData = userDoc.data() || {};
+
+            return {
+                id: doc.id,
                 type: 'application',
-                user: app.user_name,
-                avatar: fixUrl(app.user_avatar, req),
+                user: userData.name,
+                avatar: fixUrl(userData.profile_photo, req),
                 details: `submitted a new driver application.`,
                 time: app.created_at
-            }))
-        });
+            };
+        }));
+
+        res.json({ success: true, stats, recentActivity });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
 };
-
-import { checkOfflineStatus } from './driverController';
 
 export const getAllDrivers = async (req: Request, res: Response) => {
     try {
         // Clean up stale online statuses first
         await checkOfflineStatus();
 
-        const [rows] = await pool.execute<RowDataPacket[]>(`
-            SELECT u.id, u.name, u.email, u.phone, u.profile_photo, u.status, u.created_at,
-                   d.car_model, d.car_color, d.plate_number, d.rating, d.is_online, d.online_status, d.last_seen_at,
-                   (SELECT COUNT(*) FROM ride_requests WHERE driver_id = u.id AND status = 'completed') as total_trips
-            FROM users u
-            LEFT JOIN drivers d ON u.id = d.user_id
-            WHERE u.role = 'driver'
-            ORDER BY u.created_at DESC
-        `);
+        const usersSnapshot = await db.collection('users')
+            .where('role', '==', 'driver')
+            .get();
 
-        const fixedDrivers = rows.map(driver => ({
-            ...driver,
-            profile_photo: fixUrl(driver.profile_photo, req)
+        const drivers = await Promise.all(usersSnapshot.docs.map(async (userDoc) => {
+            const userData = userDoc.data();
+            const driverRef = db.collection('drivers').doc(userDoc.id);
+            const driverDoc = await driverRef.get();
+            const driverData = driverDoc.data() || {};
+
+            // Count completed trips
+            const tripsSnapshot = await db.collection('ride_requests')
+                .where('driver_id', '==', userDoc.id)
+                .where('status', '==', 'completed')
+                .get();
+
+            return {
+                ...userData,
+                ...driverData,
+                id: userDoc.id,
+                profile_photo: fixUrl(userData.profile_photo, req),
+                total_trips: tripsSnapshot.size
+            };
         }));
 
-        res.json({ success: true, drivers: fixedDrivers });
+        drivers.sort((a, b) => new Date((b as any).created_at).getTime() - new Date((a as any).created_at).getTime());
+
+        res.json({ success: true, drivers });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -385,13 +431,18 @@ export const toggleDriverStatus = async (req: Request, res: Response) => {
     }
 
     try {
-        await pool.execute('UPDATE users SET status = ? WHERE id = ?', [status, id]);
+        const userRef = db.collection('users').doc(id);
+        await userRef.update({ status });
 
         // Log the action
-        await pool.execute(
-            'INSERT INTO audit_logs (user_id, action, target_type, target_id, details) VALUES (?, ?, ?, ?, ?)',
-            [adminId, 'update_user_status', 'user', id, JSON.stringify({ status })]
-        );
+        await db.collection('audit_logs').add({
+            user_id: adminId,
+            action: 'update_user_status',
+            target_type: 'user',
+            target_id: id,
+            details: JSON.stringify({ status }),
+            timestamp: new Date().toISOString()
+        });
 
         res.json({ success: true, message: `Driver status updated to ${status}` });
     } catch (error: any) {
@@ -407,74 +458,110 @@ export const getDriverProfile = async (req: Request, res: Response) => {
         await checkOfflineStatus();
 
         // 1. Core Profile
-        const [userRows] = await pool.execute<RowDataPacket[]>(`
-            SELECT u.id, u.name, u.email, u.phone, u.profile_photo, u.status, u.role, u.created_at,
-                   d.car_model, d.car_color, d.plate_number, d.rating, d.is_online
-            FROM users u
-            LEFT JOIN drivers d ON u.id = d.user_id
-            WHERE u.id = ? AND u.role = 'driver'
-        `, [id]);
-
-        if (userRows.length === 0) {
+        const userDoc = await db.collection('users').doc(id).get();
+        if (!userDoc.exists || userDoc.data()?.role !== 'driver') {
             return res.status(404).json({ success: false, message: 'Driver not found' });
         }
 
-        const driver = userRows[0];
-        driver.profile_photo = fixUrl(driver.profile_photo, req);
+        const driverDoc = await db.collection('drivers').doc(id).get();
+        const userData = userDoc.data()!;
+        const driverData = driverDoc.data() || {};
 
-        // Calculate Real-time Status
-        let realTimeStatus = driver.is_online ? 'idle' : 'offline';
-
-        // 2. Active Trip Check
-        const [activeTripRows] = await pool.execute<RowDataPacket[]>(`
-            SELECT rr.id, rr.pickup_location, rr.destination, rr.status, rr.created_at, rr.fare,
-                   u.name as passenger_name
-            FROM ride_requests rr
-            JOIN users u ON rr.passenger_id = u.id
-            WHERE rr.driver_id = ? AND rr.status IN ('accepted', 'arrived', 'picked_up')
-            LIMIT 1
-        `, [id]);
-
-        let activeTrip = null;
-        if (activeTripRows.length > 0) {
-            realTimeStatus = 'busy';
-            activeTrip = activeTripRows[0];
-        }
-
-        driver.realTimeStatus = realTimeStatus;
-
-        // 3. Earnings & Trip Counts
-        const [statRows] = await pool.execute<RowDataPacket[]>(`
-            SELECT 
-                SUM(CASE WHEN status = 'completed' THEN fare ELSE 0 END) as total_earnings,
-                COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_trips,
-                COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_trips
-            FROM ride_requests 
-            WHERE driver_id = ?
-        `, [id]);
-
-        const stats = {
-            totalEarnings: Number(statRows[0]?.total_earnings || 0),
-            completedTrips: Number(statRows[0]?.completed_trips || 0),
-            cancelledTrips: Number(statRows[0]?.cancelled_trips || 0)
+        const driver = {
+            ...userData,
+            ...driverData,
+            id: userDoc.id,
+            profile_photo: fixUrl(userData.profile_photo, req)
         };
 
-        // 4. Trip History
-        const [tripRows] = await pool.execute<RowDataPacket[]>(`
-            SELECT rr.id, rr.fare, rr.status, rr.created_at, u.name as passenger_name
-            FROM ride_requests rr
-            JOIN users u ON rr.passenger_id = u.id
-            WHERE rr.driver_id = ?
-            ORDER BY rr.created_at DESC
-            LIMIT 50
-        `, [id]);
+        // Calculate Real-time Status
+        let realTimeStatus = (driver as any).is_online ? 'idle' : 'offline';
+
+        // 2. Active Trip Check
+        const activeTripSnapshot = await db.collection('ride_requests')
+            .where('driver_id', '==', id)
+            .where('status', 'in', ['accepted', 'arrived', 'picked_up'])
+            .limit(1)
+            .get();
+
+        let activeTrip = null;
+        if (!activeTripSnapshot.empty) {
+            realTimeStatus = 'busy';
+            const tripData = activeTripSnapshot.docs[0].data();
+            const passengerDoc = await db.collection('users').doc(tripData.passenger_id).get();
+            activeTrip = {
+                ...tripData,
+                id: activeTripSnapshot.docs[0].id,
+                passenger_name: passengerDoc.data()?.name
+            };
+        }
+
+        (driver as any).realTimeStatus = realTimeStatus;
+
+        // 3. Earnings & Trip Counts
+        const allTripsSnapshot = await db.collection('ride_requests')
+            .where('driver_id', '==', id)
+            .get();
+
+        const stats = {
+            totalEarnings: 0,
+            completedTrips: 0,
+            cancelled_trips: 0
+        };
+
+        allTripsSnapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.status === 'completed') {
+                stats.completedTrips++;
+                stats.totalEarnings += Number(data.fare || 0);
+            } else if (data.status === 'cancelled') {
+                stats.cancelled_trips++;
+            }
+        });
+
+        // 4. Trip History (re-query for ordering and limit)
+        const tripHistorySnapshot = await db.collection('ride_requests')
+            .where('driver_id', '==', id)
+            .orderBy('created_at', 'desc')
+            .limit(50)
+            .get();
+
+        const trips = await Promise.all(tripHistorySnapshot.docs.map(async (doc) => {
+            const trip = doc.data();
+            const passDoc = await db.collection('users').doc(trip.passenger_id).get();
+            return {
+                ...trip,
+                id: doc.id,
+                passenger_name: passDoc.data()?.name
+            };
+        }));
+
+        // 5. Subscription History
+        const subSnapshot = await db.collection('driver_subscriptions')
+            .where('driver_id', '==', id)
+            .orderBy('created_at', 'desc')
+            .get();
+
+        const subscriptions = await Promise.all(subSnapshot.docs.map(async (doc) => {
+            const sub = doc.data();
+            const planDoc = await db.collection('subscription_plans').doc(sub.plan_id).get();
+            const plan = planDoc.data() || {};
+            return {
+                ...sub,
+                id: doc.id,
+                plan_name: plan.name,
+                price: plan.price,
+                duration_days: plan.duration_days
+            };
+        }));
 
         res.json({
             success: true,
             driver,
             activeTrip,
             stats,
-            trips: tripRows
+            trips,
+            subscriptions
         });
 
     } catch (error: any) {
@@ -486,25 +573,38 @@ export const getTripDetails = async (req: Request, res: Response) => {
     const { id } = req.params;
 
     try {
-        const [rows] = await pool.execute<RowDataPacket[]>(`
-            SELECT rr.*, 
-                   u_p.name as passenger_name, u_p.phone as passenger_phone, u_p.profile_photo as passenger_avatar,
-                   u_d.name as driver_name, u_d.phone as driver_phone, u_d.profile_photo as driver_avatar,
-                   d.car_model, d.plate_number
-            FROM ride_requests rr
-            JOIN users u_p ON rr.passenger_id = u_p.id
-            LEFT JOIN users u_d ON rr.driver_id = u_d.id
-            LEFT JOIN drivers d ON rr.driver_id = d.user_id
-            WHERE rr.id = ?
-        `, [id]);
+        const rideRef = db.collection('ride_requests').doc(id);
+        const rideDoc = await rideRef.get();
 
-        if (rows.length === 0) {
+        if (!rideDoc.exists) {
             return res.status(404).json({ success: false, message: 'Trip not found' });
         }
 
-        const trip = rows[0];
-        trip.passenger_avatar = fixUrl(trip.passenger_avatar, req);
-        trip.driver_avatar = fixUrl(trip.driver_avatar, req);
+        const tripData = rideDoc.data()!;
+        const passengerDoc = await db.collection('users').doc(tripData.passenger_id).get();
+        const passengerData = passengerDoc.data() || {};
+
+        let driverData = {};
+        let driverProfileData = {};
+        if (tripData.driver_id) {
+            const dUserDoc = await db.collection('users').doc(tripData.driver_id).get();
+            driverData = dUserDoc.data() || {};
+            const dProfileDoc = await db.collection('drivers').doc(tripData.driver_id).get();
+            driverProfileData = dProfileDoc.data() || {};
+        }
+
+        const trip = {
+            ...tripData,
+            id: rideDoc.id,
+            passenger_name: passengerData.name,
+            passenger_phone: passengerData.phone,
+            passenger_avatar: fixUrl(passengerData.profile_photo, req),
+            driver_name: (driverData as any).name,
+            driver_phone: (driverData as any).phone,
+            driver_avatar: fixUrl((driverData as any).profile_photo, req),
+            car_model: (driverProfileData as any).car_model,
+            plate_number: (driverProfileData as any).plate_number
+        };
 
         res.json({ success: true, trip });
     } catch (error: any) {
@@ -514,14 +614,19 @@ export const getTripDetails = async (req: Request, res: Response) => {
 
 export const getAllAdmins = async (req: Request, res: Response) => {
     try {
-        const [rows] = await pool.execute<RowDataPacket[]>(`
-            SELECT id, name, email, phone, role, is_online, created_at
-            FROM users
-            WHERE role IN ('admin', 'super_admin')
-            ORDER BY created_at DESC
-        `);
+        const querySnapshot = await db.collection('users')
+            .where('role', 'in', ['admin', 'super_admin'])
+            .get();
 
-        res.json({ success: true, admins: rows });
+        const admins = querySnapshot.docs.map(doc => ({
+            ...doc.data(),
+            id: doc.id,
+            profile_photo: fixUrl(doc.data().profile_photo, req)
+        }));
+
+        admins.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+        res.json({ success: true, admins });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -532,16 +637,23 @@ export const createAdmin = async (req: Request, res: Response) => {
 
     try {
         // Check if email already exists
-        const [existing] = await pool.execute<RowDataPacket[]>('SELECT id FROM users WHERE email = ?', [email]);
-        if (existing.length > 0) {
+        const emailCheck = await db.collection('users').where('email', '==', email).get();
+        if (!emailCheck.empty) {
             return res.status(400).json({ success: false, message: 'Email already registered' });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const [result] = await pool.execute(
-            'INSERT INTO users (name, email, phone, password, role, status) VALUES (?, ?, ?, ?, ?, ?)',
-            [name, email, phone, hashedPassword, role || 'admin', 'active']
-        );
+        const adminRef = db.collection('users').doc();
+        await adminRef.set({
+            name,
+            email,
+            phone,
+            password: hashedPassword,
+            role: role || 'admin',
+            status: 'active',
+            is_online: false,
+            created_at: new Date().toISOString()
+        });
 
         res.status(201).json({ success: true, message: 'Admin created successfully' });
     } catch (error: any) {
@@ -554,7 +666,7 @@ export const toggleAdminStatus = async (req: Request, res: Response) => {
     const { status } = req.body;
 
     try {
-        await pool.execute('UPDATE users SET status = ? WHERE id = ? AND role IN (\'admin\', \'super_admin\')', [status, id]);
+        await db.collection('users').doc(id).update({ status });
         res.json({ success: true, message: `Admin status updated to ${status}` });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -566,7 +678,7 @@ export const updateAdminRole = async (req: Request, res: Response) => {
     const { role } = req.body;
 
     try {
-        await pool.execute('UPDATE users SET role = ? WHERE id = ? AND role IN (\'admin\', \'super_admin\')', [role, id]);
+        await db.collection('users').doc(id).update({ role });
         res.json({ success: true, message: `Admin role updated to ${role}` });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -580,28 +692,29 @@ export const updateAdminProfile = async (req: Request, res: Response) => {
     try {
         // Check if email is already taken by another user
         if (email) {
-            const [existing] = await pool.execute<RowDataPacket[]>(
-                'SELECT id FROM users WHERE email = ? AND id != ?',
-                [email, userId]
-            );
-            if (existing.length > 0) {
+            const emailCheck = await db.collection('users')
+                .where('email', '==', email)
+                .get();
+
+            const otherUsers = emailCheck.docs.filter(doc => doc.id !== userId);
+            if (otherUsers.length > 0) {
                 return res.status(400).json({ success: false, message: 'Email already in use' });
             }
         }
 
         // Update profile
-        await pool.execute(
-            'UPDATE users SET name = ?, email = ?, phone = ? WHERE id = ?',
-            [name, email, phone, userId]
-        );
+        const userRef = db.collection('users').doc(userId);
+        await userRef.update({ name, email, phone });
 
         // Fetch updated user data
-        const [rows] = await pool.execute<RowDataPacket[]>(
-            'SELECT id, name, email, phone, role FROM users WHERE id = ?',
-            [userId]
-        );
+        const updatedDoc = await userRef.get();
+        const userData = updatedDoc.data();
 
-        res.json({ success: true, message: 'Profile updated successfully', user: rows[0] });
+        res.json({
+            success: true,
+            message: 'Profile updated successfully',
+            user: { ...userData, id: updatedDoc.id }
+        });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -612,27 +725,20 @@ export const changePassword = async (req: Request, res: Response) => {
     const { currentPassword, newPassword } = req.body;
 
     try {
-        // Verify current password
-        const [rows] = await pool.execute<RowDataPacket[]>(
-            'SELECT password FROM users WHERE id = ?',
-            [userId]
-        );
+        const userRef = db.collection('users').doc(userId);
+        const userDoc = await userRef.get();
 
-        if (rows.length === 0) {
+        if (!userDoc.exists) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        const isMatch = await bcrypt.compare(currentPassword, rows[0].password);
+        const isMatch = await bcrypt.compare(currentPassword, userDoc.data()?.password);
         if (!isMatch) {
             return res.status(400).json({ success: false, message: 'Current password is incorrect' });
         }
 
-        // Hash and update new password
         const hashedPassword = await bcrypt.hash(newPassword, 10);
-        await pool.execute(
-            'UPDATE users SET password = ? WHERE id = ?',
-            [hashedPassword, userId]
-        );
+        await userRef.update({ password: hashedPassword });
 
         res.json({ success: true, message: 'Password changed successfully' });
     } catch (error: any) {
@@ -649,26 +755,19 @@ export const uploadAdminProfilePhoto = async (req: Request, res: Response) => {
 
     try {
         const host = req.get('host') || 'localhost:5000';
-        const photoUrl = `http://${host}/uploads/${req.file.filename}`;
+        const photoUrl = `${req.protocol}://${host}/uploads/${req.file.filename}`;
 
-        await pool.execute(
-            'UPDATE users SET profile_photo = ? WHERE id = ?',
-            [photoUrl, userId]
-        );
+        const userRef = db.collection('users').doc(userId);
+        await userRef.update({ profile_photo: photoUrl });
 
-        // Fetch updated user data
-        const [rows] = await pool.execute<RowDataPacket[]>(
-            'SELECT id, name, email, phone, role, profile_photo FROM users WHERE id = ?',
-            [userId]
-        );
-
+        const updatedDoc = await userRef.get();
         const fixedPhotoUrl = fixUrl(photoUrl, req);
 
         res.json({
             success: true,
             message: 'Profile photo uploaded successfully',
             photoUrl: fixedPhotoUrl,
-            user: { ...rows[0], profile_photo: fixedPhotoUrl }
+            user: { ...updatedDoc.data(), id: updatedDoc.id, profile_photo: fixedPhotoUrl }
         });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -679,15 +778,18 @@ export const getLoginHistory = async (req: Request, res: Response) => {
     const userId = (req as any).user?.id;
 
     try {
-        const [rows] = await pool.execute<RowDataPacket[]>(`
-            SELECT id, ip_address, user_agent, login_time
-            FROM login_history
-            WHERE user_id = ?
-            ORDER BY login_time DESC
-            LIMIT 20
-        `, [userId]);
+        const querySnapshot = await db.collection('login_history')
+            .where('user_id', '==', userId)
+            .orderBy('login_time', 'desc')
+            .limit(20)
+            .get();
 
-        res.json({ success: true, history: rows });
+        const history = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+
+        res.json({ success: true, history });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -695,21 +797,27 @@ export const getLoginHistory = async (req: Request, res: Response) => {
 
 export const getPassengers = async (req: Request, res: Response) => {
     try {
-        const [rows] = await pool.execute<RowDataPacket[]>(`
-            SELECT u.id, u.name, u.email, u.phone, u.profile_photo, u.status, u.created_at, u.last_login_at,
-                   (SELECT COUNT(*) FROM ride_requests WHERE passenger_id = u.id) as total_trips
-            FROM users u
-            WHERE u.role = 'passenger'
-            ORDER BY u.created_at DESC
-        `);
+        const querySnapshot = await db.collection('users')
+            .where('role', '==', 'passenger')
+            .get();
 
-        // Fix photo URLs
-        const fixedRows = rows.map(user => ({
-            ...user,
-            profile_photo: fixUrl(user.profile_photo, req)
+        const passengers = await Promise.all(querySnapshot.docs.map(async (doc) => {
+            const userData = doc.data();
+            const tripsSnapshot = await db.collection('ride_requests')
+                .where('passenger_id', '==', doc.id)
+                .get();
+
+            return {
+                ...userData,
+                id: doc.id,
+                profile_photo: fixUrl(userData.profile_photo, req),
+                total_trips: tripsSnapshot.size
+            };
         }));
 
-        res.json({ success: true, passengers: fixedRows });
+        passengers.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+        res.json({ success: true, passengers });
     } catch (error: any) {
         res.json({ success: false, message: error.message });
     }
@@ -729,7 +837,7 @@ export const updateUserStatus = async (req: Request, res: Response) => {
     }
 
     try {
-        await pool.execute('UPDATE users SET status = ? WHERE id = ?', [status, id]);
+        await db.collection('users').doc(id).update({ status });
         res.json({ success: true, message: `User status updated to ${status}` });
     } catch (error: any) {
         res.json({ success: false, message: error.message });
@@ -741,45 +849,52 @@ export const getPassengerProfile = async (req: Request, res: Response) => {
 
     try {
         // 1. Get User Details
-        const [userRows] = await pool.execute<RowDataPacket[]>(`
-            SELECT id, name, email, phone, profile_photo, status, created_at, role
-            FROM users 
-            WHERE id = ? AND role = 'passenger'
-        `, [id]);
-
-        if (userRows.length === 0) {
+        const userDoc = await db.collection('users').doc(id).get();
+        if (!userDoc.exists || userDoc.data()?.role !== 'passenger') {
             return res.json({ success: false, message: 'Passenger not found' });
         }
 
-        const user = userRows[0];
-        user.profile_photo = fixUrl(user.profile_photo, req);
+        const userData = userDoc.data()!;
+        const user = {
+            ...userData,
+            id: userDoc.id,
+            profile_photo: fixUrl(userData.profile_photo, req)
+        };
 
         // 2. Get Ride History
-        const [rideRows] = await pool.execute<RowDataPacket[]>(`
-            SELECT r.*, 
-                   d_user.name as driver_name,
-                   d.id as driver_id_internal
-            FROM ride_requests r
-            LEFT JOIN drivers d ON r.driver_id = d.user_id
-            LEFT JOIN users d_user ON d.user_id = d_user.id
-            WHERE r.passenger_id = ?
-            ORDER BY r.created_at DESC
-        `, [id]);
+        const ridesSnapshot = await db.collection('ride_requests')
+            .where('passenger_id', '==', id)
+            .orderBy('created_at', 'desc')
+            .get();
+
+        const trips = await Promise.all(ridesSnapshot.docs.map(async (doc) => {
+            const trip = doc.data();
+            let driverName = 'N/A';
+            if (trip.driver_id) {
+                const dDoc = await db.collection('users').doc(trip.driver_id).get();
+                driverName = dDoc.data()?.name || 'N/A';
+            }
+            return {
+                ...trip,
+                id: doc.id,
+                driver_name: driverName
+            };
+        }));
 
         // 3. Get Stats
         const stats = {
-            total_trips: rideRows.length,
-            completed_trips: rideRows.filter(r => r.status === 'completed').length,
-            cancelled_trips: rideRows.filter(r => r.status === 'cancelled').length,
-            total_spent: rideRows
-                .filter(r => r.status === 'completed')
-                .reduce((sum, r) => sum + Number(r.fare || 0), 0)
+            total_trips: trips.length,
+            completed_trips: trips.filter((r: any) => r.status === 'completed').length,
+            cancelled_trips: trips.filter((r: any) => r.status === 'cancelled').length,
+            total_spent: trips
+                .filter((r: any) => r.status === 'completed')
+                .reduce((sum, r: any) => sum + Number(r.fare || 0), 0)
         };
 
         res.json({
             success: true,
             user,
-            trips: rideRows,
+            trips,
             stats
         });
 

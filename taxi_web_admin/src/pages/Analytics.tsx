@@ -4,7 +4,7 @@ import {
     Users,
     Car,
     FileCheck,
-    DollarSign,
+    Banknote,
     TrendingUp,
     PieChart as PieChartIcon,
     BarChart3,
@@ -98,7 +98,7 @@ const Analytics: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard label="Total Users" value={users.total} icon={Users} color="primary" trend={12} />
                 <StatCard label="Completed Rides" value={rides.completed} icon={Car} color="green-500" trend={8} />
-                <StatCard label="Platform Revenue" value={`K ${totalRevenue.toLocaleString()}`} icon={DollarSign} color="secondary" subtext="Net revenue from completed rides" />
+                <StatCard label="Platform Revenue" value={`K ${totalRevenue.toLocaleString()}`} icon={Banknote} color="secondary" subtext="Net revenue from completed rides" />
                 <StatCard label="Pending Apps" value={applications.pending} icon={FileCheck} color="blue-500" subtext="Awaiting admin review" />
             </div>
 

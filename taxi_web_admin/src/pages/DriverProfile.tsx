@@ -15,7 +15,11 @@ import {
     Calendar,
     ChevronRight,
     Activity,
-    TrendingUp
+    TrendingUp,
+    CreditCard,
+    Pause,
+    Play,
+    Trash2
 } from 'lucide-react';
 
 const DriverProfile: React.FC = () => {
@@ -106,7 +110,7 @@ const DriverProfile: React.FC = () => {
         </div>
     );
 
-    const { driver, stats, trips, activeTrip } = data;
+    const { driver, stats, trips, activeTrip, subscriptions = [] } = data;
 
     return (
         <div className="space-y-8 pb-10">
@@ -123,17 +127,21 @@ const DriverProfile: React.FC = () => {
                     {getStatusIndicator(driver.realTimeStatus)}
                     <div className="w-px h-8 bg-white/5"></div>
                     <button
+                        onClick={() => navigate(`/drivers/${id}/subscriptions`)}
+                        className="flex items-center space-x-2 px-6 py-3 bg-white/5 text-gray-400 font-bold rounded-xl border border-white/5 hover:bg-white/10 hover:text-primary transition-all active:scale-95"
+                    >
+                        <CreditCard className="w-5 h-5" />
+                        <span>Subscriptions</span>
+                    </button>
+                    <button
                         onClick={toggleStatus}
-                        className={`flex items-center px-6 py-2 rounded-xl font-bold transition-all ${driver.status === 'suspended'
-                            ? 'bg-green-500 text-black hover:bg-green-400'
-                            : 'bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white'
+                        className={`flex items-center space-x-2 px-6 py-3 rounded-xl font-bold transition-all active:scale-95 shadow-lg ${driver.status === 'suspended'
+                            ? 'bg-green-500 text-black hover:bg-green-400 shadow-green-500/20'
+                            : 'bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white shadow-red-500/10'
                             }`}
                     >
-                        {driver.status === 'suspended' ? (
-                            <><UserCheck className="w-4 h-4 mr-2" /> Activate Driver</>
-                        ) : (
-                            <><UserX className="w-4 h-4 mr-2" /> Suspend Driver</>
-                        )}
+                        {driver.status === 'suspended' ? <UserCheck className="w-5 h-5" /> : <UserX className="w-5 h-5" />}
+                        <span>{driver.status === 'suspended' ? 'Reactivate Profile' : 'Suspend Account'}</span>
                     </button>
                 </div>
             </div>
@@ -241,26 +249,26 @@ const DriverProfile: React.FC = () => {
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    {/* Vehicle Info */}
-                    <div className="glass p-8 rounded-[2rem] border border-white/5 relative overflow-hidden">
-                        <div className="absolute bottom-0 right-0 p-8 opacity-5">
-                            <Car className="w-32 h-32" />
+                {/* Vehicle Info */}
+                <div className="glass p-8 rounded-[2rem] border border-white/5 relative overflow-hidden">
+                    <div className="absolute bottom-0 right-0 p-8 opacity-5">
+                        <Car className="w-32 h-32" />
+                    </div>
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] mb-8 text-gray-500 border-b border-white/5 pb-4">Vehicle Assets</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+                        <div>
+                            <p className="text-gray-500 text-[10px] uppercase font-bold mb-1 tracking-widest">Car Model</p>
+                            <p className="font-bold text-xl">{driver.car_model || 'N/A'}</p>
                         </div>
-                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] mb-8 text-gray-500 border-b border-white/5 pb-4">Vehicle Assets</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-                            <div>
-                                <p className="text-gray-500 text-[10px] uppercase font-bold mb-1 tracking-widest">Car Model</p>
-                                <p className="font-bold text-xl">{driver.car_model || 'N/A'}</p>
-                            </div>
-                            <div>
-                                <p className="text-gray-500 text-[10px] uppercase font-bold mb-1 tracking-widest">Colorway</p>
-                                <p className="font-bold text-xl">{driver.car_color || 'N/A'}</p>
-                            </div>
-                            <div>
-                                <p className="text-gray-500 text-[10px] uppercase font-bold mb-1 tracking-widest">Registry ID</p>
-                                <p className="font-bold text-xl text-primary">{driver.plate_number || 'N/A'}</p>
-                            </div>
+                        <div>
+                            <p className="text-gray-500 text-[10px] uppercase font-bold mb-1 tracking-widest">Colorway</p>
+                            <p className="font-bold text-xl">{driver.car_color || 'N/A'}</p>
+                        </div>
+                        <div>
+                            <p className="text-gray-500 text-[10px] uppercase font-bold mb-1 tracking-widest">Registry ID</p>
+                            <p className="font-bold text-xl text-primary">{driver.plate_number || 'N/A'}</p>
                         </div>
                     </div>
                 </div>

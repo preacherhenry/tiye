@@ -5,7 +5,7 @@ import {
     ArrowLeft,
     MapPin,
     Clock,
-    DollarSign,
+    Banknote,
     XCircle,
     Calendar,
     ChevronRight,
@@ -110,7 +110,7 @@ const TripDetails: React.FC = () => {
                         <div className="grid grid-cols-3 gap-8 mt-16 pt-10 border-t border-white/5">
                             <div>
                                 <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-2 flex items-center">
-                                    <DollarSign className="w-3 h-3 mr-1" /> Fare Total
+                                    <Banknote className="w-3 h-3 mr-1" /> Fare Total
                                 </p>
                                 <p className="text-3xl font-black text-secondary">K {Number(trip.fare).toLocaleString()}</p>
                             </div>

@@ -126,8 +126,19 @@ const Drivers: React.FC = () => {
                         <div className="relative w-16 h-16 mr-6">
                             <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center text-primary font-bold overflow-hidden border border-primary/20 shrink-0">
                                 {driver.profile_photo ? (
-                                    <img src={driver.profile_photo} alt="" className="w-full h-full object-cover" />
-                                ) : (driver.name || '?').charAt(0)}
+                                    <img
+                                        src={driver.profile_photo}
+                                        alt=""
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = 'none';
+                                            (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                                        }}
+                                    />
+                                ) : (
+                                    (driver.name || '?').charAt(0)
+                                )}
+                                {driver.profile_photo && <span className="hidden w-full h-full flex items-center justify-center bg-primary/10 absolute top-0 left-0">{(driver.name || '?').charAt(0)}</span>}
                             </div>
                             {/* Online Status Indicator */}
                             <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-4 border-surface ${driver.online_status === 'online' ? 'bg-green-500' :

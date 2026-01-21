@@ -1,0 +1,21 @@
+--- START DB CHECK ---
+TOTAL APPLICATIONS: 3
+- App ID: 1, User ID: 36, Status: approved, Name: Leo
+- App ID: 5, User ID: 50, Status: pending, Name: Leo
+- App ID: 6, User ID: 52, Status: rejected, Name: Bhjj
+TOTAL USERS: 12
+- User ID: 32, Name: Preacher , Role: driver, Status: approved
+- User ID: 33, Name: Henry, Role: passenger, Status: 
+- User ID: 34, Name: Bob, Role: driver, Status: approved
+- User ID: 37, Name: PREACHER SIANKUNGUYA, Role: super_admin, Status: 
+- User ID: 38, Name: Alice Walker, Role: passenger, Status: 
+- User ID: 39, Name: Bob Smith, Role: passenger, Status: 
+- User ID: 40, Name: Charlie Brown, Role: passenger, Status: 
+- User ID: 41, Name: Diana Prince, Role: passenger, Status: 
+- User ID: 42, Name: Evan Wright, Role: passenger, Status: 
+- User ID: 44, Name: blessing siankunguya, Role: admin, Status: 
+- User ID: 50, Name: Leo, Role: driver, Status: pending
+- User ID: 52, Name: Bhjj, Role: driver, Status: rejected
+TOTAL RIDE REQUESTS: 4
+TOTAL DRIVERS: 2
+--- END DB CHECK ---

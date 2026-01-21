@@ -1,0 +1,64 @@
+﻿node : node:internal/modules
+/cjs/loader:1148
+At line:1 char:1
++ node 
+test_login_endpoint.js 2>&1 
+| Out-File -FilePath 
+login_test_outp ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~
+    + CategoryInfo          
+    : NotSpecified: (node:  
+  internal/modules/cjs/lo   
+ ader:1148:String) [], R    
+emoteException
+    + FullyQualifiedErrorId 
+    : NativeCommandError
+ 
+  throw err;
+  ^
+
+Error: Cannot find module 
+'axios'
+Require stack:
+- C:\Users\lenovo\taxi_backe
+nd\test_login_endpoint.js
+    at 
+Module._resolveFilename (nod
+e:internal/modules/cjs/loade
+r:1145:15)
+    at Module._load (node:in
+ternal/modules/cjs/loader:98
+6:27)
+    at Module.require (node:
+internal/modules/cjs/loader:
+1233:19)
+    at require (node:interna
+l/modules/helpers:179:18)
+    at Object.<anonymous> (C
+:\Users\lenovo\taxi_backend\
+test_login_endpoint.js:1:15)
+    at Module._compile (node
+:internal/modules/cjs/loader
+:1358:14)
+    at 
+Module._extensions..js (node
+:internal/modules/cjs/loader
+:1416:10)
+    at Module.load (node:int
+ernal/modules/cjs/loader:120
+8:32)
+    at Module._load (node:in
+ternal/modules/cjs/loader:10
+24:12)
+    at Function.executeUserE
+ntryPoint [as runMain] (node
+:internal/modules/run_main:1
+74:12) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [ 'C:\\Users
+\\lenovo\\taxi_backend\\test
+_login_endpoint.js' ]
+}
+
+Node.js v20.13.0

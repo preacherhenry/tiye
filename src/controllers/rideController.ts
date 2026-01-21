@@ -1,6 +1,5 @@
 import { Request, Response } from 'express';
-import pool from '../config/db';
-import { RowDataPacket, ResultSetHeader } from 'mysql2';
+import { db } from '../config/firebase';
 import { isLocationInServiceArea } from '../config/serviceArea';
 
 const fixPhotoUrl = (url: string | null, req: Request) => {
@@ -12,29 +11,43 @@ const fixPhotoUrl = (url: string | null, req: Request) => {
 export const getRideDetails = async (req: Request, res: Response) => {
     const { id } = req.params;
     try {
-        const [rows] = await pool.execute<RowDataPacket[]>(`
-            SELECT r.*, 
-                   u.name as driver_name, u.phone as driver_phone, u.profile_photo as driver_photo,
-                   d.car_model, d.car_color, d.plate_number, d.rating as driver_rating,
-                   u.current_lat, u.current_lng
-            FROM ride_requests r 
-            LEFT JOIN users u ON r.driver_id = u.id 
-            LEFT JOIN drivers d ON r.driver_id = d.user_id
-            WHERE r.id = ?
-        `, [id]);
+        const rideDoc = await db.collection('rides').doc(id).get();
 
-        if (rows.length === 0) {
+        if (!rideDoc.exists) {
             res.json({ success: false, message: 'Ride not found' });
             return;
         }
 
-        const ride = rows[0];
-        // console.log(`📦 Ride Details for ${id}: Status=${ride.status}, Driver=${ride.driver_id}, Phone=${ride.driver_phone}, Lat=${ride.current_lat}`);
+        const ride = rideDoc.data()!;
+
+        // Fetch driver info if driver is assigned
+        if (ride.driver_id) {
+            const userDoc = await db.collection('users').doc(ride.driver_id).get();
+            const driverDoc = await db.collection('drivers').doc(ride.driver_id).get();
+
+            if (userDoc.exists) {
+                const userData = userDoc.data()!;
+                ride.driver_name = userData.name;
+                ride.driver_phone = userData.phone;
+                ride.driver_photo = userData.profile_photo;
+                ride.current_lat = userData.current_lat;
+                ride.current_lng = userData.current_lng;
+                ride.heading = userData.heading;
+            }
+
+            if (driverDoc.exists) {
+                const driverData = driverDoc.data()!;
+                ride.car_model = driverData.car_model;
+                ride.car_color = driverData.car_color;
+                ride.plate_number = driverData.plate_number;
+                ride.driver_rating = driverData.rating;
+            }
+        }
+
         const userId = (req as any).user.id;
         const userRole = (req as any).user.role;
 
         // Security Check: Only allow Passenger or Driver involved in the ride (or Admin)
-        // Note: Assuming 'admin' role exists, checking strict ownership otherwise.
         if (ride.passenger_id !== userId && ride.driver_id !== userId && userRole !== 'admin') {
             res.status(403).json({ success: false, message: 'Unauthorized access to this ride' });
             return;
@@ -51,56 +64,90 @@ export const getRideDetails = async (req: Request, res: Response) => {
 };
 
 export const requestRide = async (req: Request, res: Response) => {
-    const { passenger_id, pickup, destination, fare, distance, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng } = req.body;
+    const {
+        passenger_id, pickup, destination, fare, distance,
+        pickup_lat, pickup_lng, dropoff_lat, dropoff_lng,
+        promoId
+    } = req.body;
+
+    console.log('📬 New Ride Request Received:');
+    console.log('   Passenger ID:', passenger_id);
 
     if (!passenger_id || !pickup || !destination) {
+        console.log('❌ Request missing required fields');
         res.json({ success: false, message: 'All fields are required' });
         return;
     }
 
     // Validate Service Area
-    // Pickup is a string "Lat,Lng" or address. We need coordinates.
-    // Assuming frontend sends 'pickup_lat' and 'pickup_lng' in body? 
-    // Looking at line 30: const { passenger_id, pickup, destination, fare, distance } = req.body;
-    // The previous code implementation (Step 2196) assumed pickup_lat/lng were separated.
-    // Current `requestRide` at L30 uses `pickup` string.
-    // I need to parse the coordinates from the request body if they exist, or parse the string.
-    // Let's check the frontend implementation to see what it sends.
-    // Wait, I should not break the existing logic. 
-    // Let's assume the frontend sends `pickup_lat`, `pickup_lng`, `dest_lat`, `dest_lng` alongside.
-
-    // UPDATED PLAN: I will modify the destructuring to extract lat/lngs and validate them.
-
     if (pickup_lat && pickup_lng) {
-        if (!isLocationInServiceArea(Number(pickup_lat), Number(pickup_lng))) {
+        const inServiceArea = await isLocationInServiceArea(Number(pickup_lat), Number(pickup_lng));
+        if (!inServiceArea) {
+            console.log(`❌ Pickup outside service area: ${pickup_lat}, ${pickup_lng}`);
             res.status(400).json({ success: false, message: "Sorry, Tiye currently operates only within the Chirundu service area." });
             return;
         }
     }
 
     if (dropoff_lat && dropoff_lng) {
-        if (!isLocationInServiceArea(Number(dropoff_lat), Number(dropoff_lng))) {
+        const inServiceArea = await isLocationInServiceArea(Number(dropoff_lat), Number(dropoff_lng));
+        if (!inServiceArea) {
+            console.log(`❌ Destination outside service area: ${dropoff_lat}, ${dropoff_lng}`);
             res.status(400).json({ success: false, message: "Sorry, the destination is outside the Tiye service area." });
             return;
         }
     }
 
     try {
-        const [result] = await pool.execute<ResultSetHeader>(
-            'INSERT INTO ride_requests (passenger_id, pickup_location, destination, fare, distance) VALUES (?, ?, ?, ?, ?)',
-            [passenger_id, pickup, destination, fare || 0, distance || 0]
-        );
-        res.json({ success: true, message: 'Ride request submitted successfully', rideId: result.insertId });
+        const batch = db.batch();
+        const rideRef = db.collection('rides').doc();
+        const rideId = rideRef.id;
+
+        const rideData = {
+            id: rideId,
+            passenger_id,
+            pickup_location: pickup,
+            destination,
+            fare: fare || 0,
+            distance: distance || 0,
+            pickup_lat: pickup_lat || 0,
+            pickup_lng: pickup_lng || 0,
+            dest_lat: dropoff_lat || 0,
+            dest_lng: dropoff_lng || 0,
+            status: 'pending',
+            created_at: new Date().toISOString()
+        };
+
+        batch.set(rideRef, rideData);
+
+        // 2. If promo used, record usage
+        if (promoId) {
+            const usageRef = db.collection('promotion_usage').doc();
+            batch.set(usageRef, {
+                promotion_id: promoId,
+                user_id: passenger_id,
+                ride_id: rideId,
+                used_at: new Date().toISOString()
+            });
+        }
+
+        await batch.commit();
+        res.json({ success: true, message: 'Ride request submitted successfully', rideId });
     } catch (error: any) {
         console.error('Request Ride Error:', error);
-        res.json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 
 export const getPendingRides = async (req: Request, res: Response) => {
     try {
-        const [rows] = await pool.execute('SELECT * FROM ride_requests WHERE status = ?', ['pending']);
-        res.json({ success: true, rides: rows });
+        const querySnapshot = await db.collection('rides')
+            .where('status', '==', 'pending')
+            .orderBy('created_at', 'desc')
+            .get();
+
+        const rides = querySnapshot.docs.map(doc => doc.data());
+        res.json({ success: true, rides });
     } catch (error: any) {
         res.json({ success: false, message: error.message });
     }
@@ -115,46 +162,57 @@ export const acceptRide = async (req: Request, res: Response) => {
     }
 
     try {
-        // Check driver exists
-        const [drivers] = await pool.execute<RowDataPacket[]>(
-            "SELECT * FROM drivers WHERE user_id = ?",
-            [driver_id]
-        );
-        if (drivers.length === 0) {
-            res.json({ success: false, message: 'Driver does not exist or has no vehicle profile' });
-            return;
+        const result = await db.runTransaction(async (transaction) => {
+            const driverRef = db.collection('drivers').doc(String(driver_id));
+            const rideRef = db.collection('rides').doc(String(ride_id));
+
+            const driverDoc = await transaction.get(driverRef);
+            const rideDoc = await transaction.get(rideRef);
+
+            if (!driverDoc.exists) {
+                return { success: false, message: 'Driver does not exist or has no vehicle profile' };
+            }
+
+            const driver = driverDoc.data()!;
+            if (driver.subscription_status !== 'active') {
+                return { success: false, message: 'You must have an active subscription to accept rides.' };
+            }
+
+            if (!rideDoc.exists) {
+                return { success: false, message: 'Ride does not exist' };
+            }
+
+            const ride = rideDoc.data()!;
+            if (ride.status === 'accepted') {
+                return { success: false, message: 'Ride has already been accepted' };
+            }
+
+            if (ride.status === 'cancelled') {
+                return { success: false, message: 'This ride has been cancelled by the passenger' };
+            }
+
+            // Update ride status and driver online_status atomically
+            transaction.update(rideRef, {
+                status: 'accepted',
+                driver_id: driver_id,
+                accepted_at: new Date().toISOString()
+            });
+
+            transaction.update(driverRef, {
+                online_status: 'on_trip',
+                last_seen_at: new Date().toISOString()
+            });
+
+            return { success: true, ride: { ...ride, status: 'accepted', driver_id } };
+        });
+
+        if (result.success) {
+            res.json({ success: true, message: 'Ride accepted successfully', ride: result.ride });
+        } else {
+            res.json(result);
         }
-
-        // Check ride exists
-        const [rides] = await pool.execute<RowDataPacket[]>('SELECT * FROM ride_requests WHERE id = ?', [ride_id]);
-        const ride = rides[0];
-
-        if (!ride) {
-            res.json({ success: false, message: 'Ride does not exist' });
-            return;
-        }
-
-        if (ride.status === 'accepted') {
-            res.json({ success: false, message: 'Ride has already been accepted' });
-            return;
-        }
-
-        // Update ride status and Driver online_status
-        await pool.execute(
-            "UPDATE ride_requests SET status = 'accepted', driver_id = ? WHERE id = ?",
-            [driver_id, ride_id]
-        );
-
-        // Update driver status to on_trip
-        await pool.execute(
-            "UPDATE drivers SET online_status = 'on_trip', last_seen_at = NOW() WHERE user_id = ?",
-            [driver_id]
-        );
-
-        const [updatedRides] = await pool.execute<RowDataPacket[]>('SELECT * FROM ride_requests WHERE id = ?', [ride_id]);
-
-        res.json({ success: true, message: 'Ride accepted successfully', ride: updatedRides[0] });
     } catch (error: any) {
+        console.error('Accept Ride Error:', error);
         res.json({ success: false, message: error.message });
     }
 };
@@ -175,22 +233,30 @@ export const updateRideStatus = async (req: Request, res: Response) => {
     }
 
     try {
-        await pool.execute(
-            "UPDATE ride_requests SET status = ? WHERE id = ?",
-            [status, ride_id]
-        );
+        await db.runTransaction(async (transaction) => {
+            const rideRef = db.collection('rides').doc(String(ride_id));
+            const rideDoc = await transaction.get(rideRef);
 
-        // If trip ended, set driver back to online
-        if (status === 'completed' || status === 'cancelled') {
-            const [rideRows] = await pool.execute<RowDataPacket[]>('SELECT driver_id FROM ride_requests WHERE id = ?', [ride_id]);
-            if (rideRows.length > 0) {
-                const driverId = rideRows[0].driver_id;
-                await pool.execute(
-                    "UPDATE drivers SET online_status = 'online', last_seen_at = NOW() WHERE user_id = ?",
-                    [driverId]
-                );
+            if (!rideDoc.exists) {
+                throw new Error('Ride not found');
             }
-        }
+
+            const ride = rideDoc.data()!;
+
+            transaction.update(rideRef, {
+                status,
+                updated_at: new Date().toISOString()
+            });
+
+            // If trip ended, set driver back to online
+            if ((status === 'completed' || status === 'cancelled') && ride.driver_id) {
+                const driverRef = db.collection('drivers').doc(String(ride.driver_id));
+                transaction.update(driverRef, {
+                    online_status: 'online',
+                    last_seen_at: new Date().toISOString()
+                });
+            }
+        });
 
         res.json({ success: true, message: `Ride updated to ${status}` });
     } catch (error: any) {
@@ -203,18 +269,14 @@ export const getPassengerRides = async (req: Request, res: Response) => {
     const status = req.query.status as string;
 
     try {
-        let query = 'SELECT * FROM ride_requests WHERE passenger_id = ?';
-        const params: any[] = [passengerId];
-
+        let query = db.collection('rides').where('passenger_id', '==', passengerId);
         if (status) {
-            query += ' AND status = ?';
-            params.push(status);
+            query = query.where('status', '==', status);
         }
 
-        query += ' ORDER BY created_at DESC';
-
-        const [rows] = await pool.execute(query, params);
-        res.json({ success: true, rides: rows });
+        const querySnapshot = await query.orderBy('created_at', 'desc').get();
+        const rides = querySnapshot.docs.map(doc => doc.data());
+        res.json({ success: true, rides });
     } catch (error: any) {
         res.json({ success: false, message: error.message });
     }
@@ -225,19 +287,98 @@ export const getDriverRides = async (req: Request, res: Response) => {
     const status = req.query.status as string;
 
     try {
-        let query = 'SELECT * FROM ride_requests WHERE driver_id = ?';
-        const params: any[] = [driverId];
-
+        let query = db.collection('rides').where('driver_id', '==', driverId);
         if (status) {
-            query += ' AND status = ?';
-            params.push(status);
+            query = query.where('status', '==', status);
         }
 
-        query += ' ORDER BY created_at DESC';
-
-        const [rows] = await pool.execute(query, params);
-        res.json({ success: true, rides: rows });
+        const querySnapshot = await query.orderBy('created_at', 'desc').get();
+        const rides = querySnapshot.docs.map(doc => doc.data());
+        res.json({ success: true, rides });
     } catch (error: any) {
         res.json({ success: false, message: error.message });
+    }
+};
+
+export const getTotalBalance = async (req: Request, res: Response) => {
+    const userId = (req as any).user?.id;
+    try {
+        const querySnapshot = await db.collection('rides')
+            .where('passenger_id', '==', String(userId))
+            .where('status', '==', 'completed')
+            .get();
+
+        const total = querySnapshot.docs.reduce((sum, doc) => sum + (parseFloat(doc.data().fare) || 0), 0);
+        res.json({ success: true, balance: total.toFixed(2) });
+    } catch (error: any) {
+        res.json({ success: false, message: error.message });
+    }
+};
+
+export const getDriverEarnings = async (req: Request, res: Response) => {
+    const userId = (req as any).user?.id;
+    try {
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+        const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+        const ridesQuerySnapshot = await db.collection('rides')
+            .where('driver_id', '==', String(userId))
+            .where('status', '==', 'completed')
+            .get();
+
+        const allRides = ridesQuerySnapshot.docs.map(doc => doc.data());
+
+        let totalEarnings = 0;
+        let todayEarnings = 0;
+        let weekEarnings = 0;
+        let monthEarnings = 0;
+        const tripCount = allRides.length;
+
+        allRides.forEach(ride => {
+            const fare = parseFloat(ride.fare) || 0;
+            totalEarnings += fare;
+
+            if (ride.created_at >= startOfToday) {
+                todayEarnings += fare;
+            }
+            if (ride.created_at >= last7Days) {
+                weekEarnings += fare;
+            }
+            if (ride.created_at >= last30Days) {
+                monthEarnings += fare;
+            }
+        });
+
+        // Chart Data (Last 7 days)
+        const chartData = [];
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const dateStr = d.toISOString().split('T')[0];
+
+            const dailyTotal = allRides
+                .filter(ride => ride.created_at.startsWith(dateStr))
+                .reduce((sum, ride) => sum + (parseFloat(ride.fare) || 0), 0);
+
+            chartData.push({
+                day: d.toLocaleDateString('en-US', { weekday: 'short' }),
+                amount: dailyTotal
+            });
+        }
+
+        res.json({
+            success: true,
+            earnings: totalEarnings.toFixed(2),
+            trips: tripCount,
+            todayEarnings: todayEarnings.toFixed(2),
+            weekEarnings: weekEarnings.toFixed(2),
+            monthEarnings: monthEarnings.toFixed(2),
+            chartData
+        });
+    } catch (error: any) {
+        console.error('Driver Earnings Error:', error);
+        res.status(500).json({ success: false, message: error.message });
     }
 };
