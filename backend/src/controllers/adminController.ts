@@ -485,23 +485,27 @@ export const getDriverProfile = async (req: Request, res: Response) => {
         // Calculate Real-time Status
         let realTimeStatus = (driver as any).is_online ? 'idle' : 'offline';
 
-        // 2. Active Trip Check
-        const activeTripSnapshot = await db.collection('ride_requests')
-            .where('driver_id', '==', id)
-            .where('status', 'in', ['accepted', 'arrived', 'picked_up'])
-            .limit(1)
-            .get();
-
+        // 2. Active Trip Check (Wrapped in try/catch to avoid Index erors crashing profile)
         let activeTrip = null;
-        if (!activeTripSnapshot.empty) {
-            realTimeStatus = 'busy';
-            const tripData = activeTripSnapshot.docs[0].data();
-            const passengerDoc = await db.collection('users').doc(tripData.passenger_id).get();
-            activeTrip = {
-                ...tripData,
-                id: activeTripSnapshot.docs[0].id,
-                passenger_name: passengerDoc.data()?.name
-            };
+        try {
+            const activeTripSnapshot = await db.collection('ride_requests')
+                .where('driver_id', '==', id)
+                .where('status', 'in', ['accepted', 'arrived', 'picked_up'])
+                .limit(1)
+                .get();
+
+            if (!activeTripSnapshot.empty) {
+                realTimeStatus = 'busy';
+                const tripData = activeTripSnapshot.docs[0].data();
+                const passengerDoc = await db.collection('users').doc(tripData.passenger_id).get();
+                activeTrip = {
+                    ...tripData,
+                    id: activeTripSnapshot.docs[0].id,
+                    passenger_name: passengerDoc.data()?.name
+                };
+            }
+        } catch (e: any) {
+            console.warn("⚠️ [GET PROFILE] Active Trip check failed (likely missing index):", e.message);
         }
 
         (driver as any).realTimeStatus = realTimeStatus;
