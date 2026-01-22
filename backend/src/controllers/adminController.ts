@@ -531,10 +531,10 @@ export const getDriverProfile = async (req: Request, res: Response) => {
             }
         });
 
-        // 4. Trip History (re-query for ordering and limit)
+        // 4. Trip History (Index-safe version: removed orderBy)
         const tripHistorySnapshot = await db.collection('ride_requests')
             .where('driver_id', '==', id)
-            .orderBy('created_at', 'desc')
+            // .orderBy('created_at', 'desc') // Requires Index
             .limit(50)
             .get();
 
@@ -547,11 +547,13 @@ export const getDriverProfile = async (req: Request, res: Response) => {
                 passenger_name: passDoc.data()?.name
             };
         }));
+        // Sort in memory instead
+        trips.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-        // 5. Subscription History
+        // 5. Subscription History (Index-safe version)
         const subSnapshot = await db.collection('driver_subscriptions')
             .where('driver_id', '==', id)
-            .orderBy('created_at', 'desc')
+            // .orderBy('created_at', 'desc') // Requires Index
             .get();
 
         const subscriptions = await Promise.all(subSnapshot.docs.map(async (doc) => {
@@ -566,6 +568,8 @@ export const getDriverProfile = async (req: Request, res: Response) => {
                 duration_days: plan.duration_days
             };
         }));
+        // Sort in memory instead
+        subscriptions.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
         res.json({
             success: true,

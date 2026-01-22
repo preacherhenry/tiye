@@ -28,6 +28,21 @@ const diagnoseDrivers = async () => {
                     console.log(`   ✅ Driver Profile (in 'drivers'): FOUND`);
                     console.log(`      Car: ${driverDoc.data()?.car_model}`);
                     console.log(`      Online Status: ${driverDoc.data()?.online_status}`);
+
+                    // REPRODUCE THE CRASH: Try the Active Trip Query
+                    console.log("   🔄 Testing 'Active Trip' Query (May fail if index missing)...");
+                    try {
+                        const activeTripSnapshot = await db.collection('ride_requests')
+                            .where('driver_id', '==', doc.id)
+                            .where('status', 'in', ['accepted', 'arrived', 'picked_up'])
+                            .limit(1)
+                            .get();
+                        console.log(`   ✅ Query Success. Active Trip Documents: ${activeTripSnapshot.size}`);
+                    } catch (e: any) {
+                        console.error(`   ❌ Query FAILED (This proves the bug):`, e.message);
+                        console.log(`   ℹ️  This confirms that a Composite Index is missing in Firebase.`);
+                    }
+
                 } else {
                     console.log(`   ❌ Driver Profile (in 'drivers'): MISSING! (This is likely the cause)`);
 
