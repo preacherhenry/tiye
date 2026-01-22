@@ -72,8 +72,8 @@
       "expo-asset"
     ],
     "extra": {
-      "apiUrl": "http://10.186.157.9:5000",
-      "socketUrl": "ws://10.186.157.9:5000",
+      "apiUrl": "https://tiye-backend.onrender.com",
+      "socketUrl": "wss://tiye-backend.onrender.com",
       "eas": {
         "projectId": "21f28f4e-8cc4-4ed8-b323-a0b6fcec408c"
       }
