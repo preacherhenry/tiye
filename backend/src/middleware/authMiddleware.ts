@@ -1,8 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
-import pool from '../config/db';
-import { RowDataPacket } from 'mysql2';
+import { db } from '../config/firebase';
 
 dotenv.config();
 
@@ -25,20 +24,25 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
         const verified = jwt.verify(token, secret);
         req.user = verified;
 
-        // Check for account suspension in the database
-        const [rows] = await pool.execute<RowDataPacket[]>(
-            'SELECT status FROM users WHERE id = ?',
-            [(verified as any).id]
-        );
+        // Check for account suspension in Firestore
+        // Use the ID from the token data
+        const userId = (verified as any).id;
 
-        if (rows.length > 0 && rows[0].status === 'suspended') {
-            console.log(`🚫 Blocked request from suspended user: ${(verified as any).id}`);
-            res.status(403).json({
-                success: false,
-                message: 'ACCOUNT SUSPENDED. CONTACT OR VISIT SERVICE PROVIDERS FOR MORE INFORMATION',
-                status: 'suspended'
-            });
-            return;
+        if (userId) {
+            const userDoc = await db.collection('users').doc(userId).get();
+
+            if (userDoc.exists) {
+                const userData = userDoc.data();
+                if (userData?.status === 'suspended') {
+                    console.log(`🚫 Blocked request from suspended user: ${userId}`);
+                    res.status(403).json({
+                        success: false,
+                        message: 'ACCOUNT SUSPENDED. CONTACT OR VISIT SERVICE PROVIDERS FOR MORE INFORMATION',
+                        status: 'suspended'
+                    });
+                    return;
+                }
+            }
         }
 
         next();
