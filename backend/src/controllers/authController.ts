@@ -112,25 +112,29 @@ export const login = async (req: Request, res: Response) => {
 
             // Update online status
             if (user.role === 'driver') {
-                await db.collection('drivers').doc(user.id).update({
-                    is_online: true,
-                    online_status: 'online',
-                    last_seen_at: new Date().toISOString()
-                });
+                if (user.id) {
+                    await db.collection('drivers').doc(user.id).update({
+                        is_online: true,
+                        online_status: 'online',
+                        last_seen_at: new Date().toISOString()
+                    });
+                }
             } else if (user.role === 'admin' || user.role === 'super_admin') {
-                await db.collection('users').doc(user.id).update({
-                    is_online: true
-                });
+                if (user.id) {
+                    await db.collection('users').doc(user.id).update({
+                        is_online: true
+                    });
 
-                // Log login history
-                const ipAddress = req.ip || req.connection.remoteAddress || 'unknown';
-                const userAgent = req.get('user-agent') || 'unknown';
-                await db.collection('login_history').add({
-                    user_id: user.id,
-                    ip_address: ipAddress,
-                    user_agent: userAgent,
-                    timestamp: new Date().toISOString()
-                });
+                    // Log login history
+                    const ipAddress = req.ip || req.connection.remoteAddress || 'unknown';
+                    const userAgent = req.get('user-agent') || 'unknown';
+                    await db.collection('login_history').add({
+                        user_id: user.id,
+                        ip_address: ipAddress,
+                        user_agent: userAgent,
+                        timestamp: new Date().toISOString()
+                    });
+                }
             }
 
             console.log(`Login successful for user: ${user.id} (${user.role})`);
