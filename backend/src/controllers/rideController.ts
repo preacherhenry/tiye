@@ -282,8 +282,12 @@ export const getPassengerRides = async (req: Request, res: Response) => {
             query = query.where('status', '==', status);
         }
 
-        const querySnapshot = await query.orderBy('created_at', 'desc').get();
+        const querySnapshot = await query.get(); // Removed orderBy
         const rides = querySnapshot.docs.map(doc => doc.data());
+
+        // Sort in memory
+        rides.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
         res.json({ success: true, rides });
     } catch (error: any) {
         res.json({ success: false, message: error.message });
@@ -300,8 +304,12 @@ export const getDriverRides = async (req: Request, res: Response) => {
             query = query.where('status', '==', status);
         }
 
-        const querySnapshot = await query.orderBy('created_at', 'desc').get();
+        const querySnapshot = await query.get(); // Removed orderBy
         const rides = querySnapshot.docs.map(doc => doc.data());
+
+        // Sort in memory
+        rides.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
         res.json({ success: true, rides });
     } catch (error: any) {
         res.json({ success: false, message: error.message });
