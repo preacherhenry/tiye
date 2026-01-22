@@ -452,6 +452,7 @@ export const toggleDriverStatus = async (req: Request, res: Response) => {
 
 export const getDriverProfile = async (req: Request, res: Response) => {
     const { id } = req.params;
+    console.log(`🔍 [GET PROFILE] Fetching driver profile for ID: ${id}`);
 
     try {
         // Run cleanup to ensure status is accurate
@@ -459,7 +460,14 @@ export const getDriverProfile = async (req: Request, res: Response) => {
 
         // 1. Core Profile
         const userDoc = await db.collection('users').doc(id).get();
+        console.log(`🔍 [GET PROFILE] UserDoc exists: ${userDoc.exists}`);
+
+        if (userDoc.exists) {
+            console.log(`🔍 [GET PROFILE] User Role: ${userDoc.data()?.role}`);
+        }
+
         if (!userDoc.exists || userDoc.data()?.role !== 'driver') {
+            console.warn(`❌ [GET PROFILE] Driver not found or role mismatch`);
             return res.status(404).json({ success: false, message: 'Driver not found' });
         }
 
