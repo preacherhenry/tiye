@@ -75,7 +75,13 @@ export const login = async (req: Request, res: Response) => {
         }
 
         const userDoc = userQuery.docs[0];
-        const user = userDoc.data();
+        const userData = userDoc.data();
+        // CRITICAL: Firestore .data() doesn't include the document ID
+        // We need to add it manually from userDoc.id
+        const user: any = {
+            ...userData,
+            id: userData.id || userDoc.id  // Use stored id field or document ID
+        };
 
         if (user && (await bcrypt.compare(password, user.password))) {
             // 1. Check for account suspension
