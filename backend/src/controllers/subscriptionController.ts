@@ -133,7 +133,9 @@ export const adminVerifySubscription = async (req: Request, res: Response) => {
 
             if (otherActive.empty) {
                 batch.update(db.collection('drivers').doc(String(driverId)), {
-                    subscription_status: 'none'
+                    subscription_status: 'none',
+                    is_online: false,
+                    online_status: 'offline'
                 });
             }
             await batch.commit();
@@ -283,9 +285,16 @@ export const adminToggleSubscriptionPause = async (req: Request, res: Response) 
             driverStatus = 'paused';
         }
 
-        await db.collection('drivers').doc(String(driverId)).update({
+        const updateData: any = {
             subscription_status: driverStatus
-        });
+        };
+
+        if (driverStatus !== 'active') {
+            updateData.is_online = false;
+            updateData.online_status = 'offline';
+        }
+
+        await db.collection('drivers').doc(String(driverId)).update(updateData);
 
         res.json({ success: true, message: `Subscription ${status}` });
     } catch (error: any) {
@@ -316,9 +325,16 @@ export const adminDeleteSubscription = async (req: Request, res: Response) => {
 
         const newStatus = activeSubs.empty ? 'none' : 'active';
 
-        await db.collection('drivers').doc(String(driverId)).update({
+        const updateData: any = {
             subscription_status: newStatus
-        });
+        };
+
+        if (newStatus !== 'active') {
+            updateData.is_online = false;
+            updateData.online_status = 'offline';
+        }
+
+        await db.collection('drivers').doc(String(driverId)).update(updateData);
 
         res.json({ success: true, message: 'Subscription deleted' });
     } catch (error: any) {
