@@ -141,14 +141,22 @@ export const requestRide = async (req: Request, res: Response) => {
 
 export const getPendingRides = async (req: Request, res: Response) => {
     try {
+        console.log('🔍 [GET PENDING RIDES] Fetching pending rides...');
+
         const querySnapshot = await db.collection('rides')
             .where('status', '==', 'pending')
-            .orderBy('created_at', 'desc')
             .get();
 
         const rides = querySnapshot.docs.map(doc => doc.data());
+
+        console.log(`✅ [GET PENDING RIDES] Found ${rides.length} pending ride(s)`);
+        if (rides.length > 0) {
+            console.log('First ride:', JSON.stringify(rides[0], null, 2));
+        }
+
         res.json({ success: true, rides });
     } catch (error: any) {
+        console.error('❌ [GET PENDING RIDES] Error:', error.message);
         res.json({ success: false, message: error.message });
     }
 };

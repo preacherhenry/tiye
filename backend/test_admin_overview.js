@@ -1,7 +1,7 @@
 const fetch = require('node-fetch');
 
 async function testAdminOverview() {
-    const url = 'https://tiye-backend.onrender.com/admin/overview';
+    const url = 'https://tiye-backend.onrender.com/admin/dashboard-stats';
 
     // Get the token from the previous login test
     const loginUrl = 'https://tiye-backend.onrender.com/login';
@@ -34,9 +34,16 @@ async function testAdminOverview() {
         }
     });
 
-    const overviewData = await overviewResponse.json();
+    const responseText = await overviewResponse.text();
     console.log('Status:', overviewResponse.status);
-    console.log('Response:', JSON.stringify(overviewData, null, 2));
+
+    try {
+        const overviewData = JSON.parse(responseText);
+        console.log('Response:', JSON.stringify(overviewData, null, 2));
+    } catch (e) {
+        console.log('❌ Failed to parse JSON. Raw response:');
+        console.log(responseText);
+    }
 }
 
 testAdminOverview().catch(console.error);
