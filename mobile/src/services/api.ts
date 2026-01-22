@@ -10,7 +10,7 @@ const ENV_API_URL = Constants.expoConfig?.extra?.apiUrl;
 // Use the computer's local IP address for physical device testing
 const LOCAL_API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000';
 // Replace with your actual machine IP if testing on real device
-const DEV_API_URL = 'http://10.186.157.9:5000';
+const DEV_API_URL = 'https://tiye-backend.onrender.com';
 
 const BASE_URL = ENV_API_URL || DEV_API_URL;
 
