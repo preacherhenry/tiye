@@ -73,21 +73,29 @@ export const getFixedRoutes = async (req: Request, res: Response) => {
 };
 
 export const createFixedRoute = async (req: Request, res: Response) => {
-    const { name, pickup_zone_id, dest_zone_id, fixed_price } = req.body;
-    if (!name || !pickup_zone_id || !dest_zone_id || !fixed_price) {
+    let { name, pickup_zone_id, dest_zone_id, fixed_price } = req.body;
+    if (!pickup_zone_id || !dest_zone_id || !fixed_price) {
         return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
     try {
-        // Fetch zone names for denormalization (optional but helpful for display)
+        // Fetch zone names for denormalization
         const pZone = await db.collection('zones').doc(pickup_zone_id).get();
         const dZone = await db.collection('zones').doc(dest_zone_id).get();
+
+        const pName = pZone.exists ? pZone.data()?.name : 'Unknown';
+        const dName = dZone.exists ? dZone.data()?.name : 'Unknown';
+
+        // Auto-generate name if missing
+        if (!name) {
+            name = `${pName} to ${dName}`;
+        }
 
         const docRef = await db.collection('fixed_routes').add({
             name,
             pickup_zone_id,
             dest_zone_id,
-            pickup_zone_name: pZone.exists ? pZone.data()?.name : 'Unknown',
-            dest_zone_name: dZone.exists ? dZone.data()?.name : 'Unknown',
+            pickup_zone_name: pName,
+            dest_zone_name: dName,
             fixed_price: parseFloat(fixed_price),
             status: 'active',
             created_at: new Date().toISOString()
