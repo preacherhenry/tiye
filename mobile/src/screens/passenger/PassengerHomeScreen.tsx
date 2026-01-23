@@ -719,7 +719,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                                                 <Ionicons name="location-sharp" size={18} color={Colors.primary} />
                                                 <View style={{ marginLeft: 10 }}>
                                                     <Text style={styles.placeName}>{place.name}</Text>
-                                                    <Text style={styles.placeCategory}>{place.category || 'Point of Interest'}</Text>
+                                                    <Text style={styles.placeCategory}>({place.category}){place.area ? ` • ${place.area}` : ''}</Text>
                                                 </View>
                                             </TouchableOpacity>
                                         ))
@@ -756,7 +756,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                                                 <Ionicons name="location-sharp" size={18} color={Colors.primary} />
                                                 <View style={{ marginLeft: 10 }}>
                                                     <Text style={styles.placeName}>{place.name}</Text>
-                                                    <Text style={styles.placeCategory}>{place.category || 'Point of Interest'}</Text>
+                                                    <Text style={styles.placeCategory}>({place.category}){place.area ? ` • ${place.area}` : ''}</Text>
                                                 </View>
                                             </TouchableOpacity>
                                         ))
