@@ -341,3 +341,150 @@ export const adminDeleteSubscription = async (req: Request, res: Response) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// --- DRIVER ENDPOINTS ---
+
+export const getAvailableSubscriptions = async (req: Request, res: Response) => {
+    const driverId = (req as any).user.id;
+
+    try {
+        const snapshots = await db.collection('driver_subscriptions')
+            .where('driver_id', '==', driverId)
+            .where('status', 'in', ['active', 'paused'])
+            .get();
+
+        const subscriptions = await Promise.all(snapshots.docs.map(async (doc) => {
+            const data = doc.data();
+            const planDoc = await db.collection('subscription_plans').doc(data.plan_id).get();
+            const plan = planDoc.data() || {};
+
+            return {
+                id: doc.id,
+                ...data,
+                plan_name: plan.name,
+                plan_price: plan.price
+            };
+        }));
+
+        res.json({ success: true, subscriptions });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const switchSubscription = async (req: Request, res: Response) => {
+    const driverId = (req as any).user.id;
+    const { subscription_id } = req.body;
+
+    try {
+        await db.runTransaction(async (transaction) => {
+            // 1. Validate Target Subscription
+            const newSubRef = db.collection('driver_subscriptions').doc(subscription_id);
+            const newSubDoc = await transaction.get(newSubRef);
+
+            if (!newSubDoc.exists || newSubDoc.data()?.driver_id !== driverId) {
+                throw new Error("Subscription not found or unauthorized");
+            }
+            const newSub = newSubDoc.data()!;
+
+            // 2. Find currently Active subscription (if any) and Pause it
+            const activeSnapshot = await db.collection('driver_subscriptions')
+                .where('driver_id', '==', driverId)
+                .where('status', '==', 'active')
+                .get();
+
+            activeSnapshot.docs.forEach(doc => {
+                if (doc.id !== subscription_id) {
+                    transaction.update(doc.ref, {
+                        status: 'paused',
+                        paused_at: new Date().toISOString()
+                    });
+                }
+            });
+
+            // 3. Activate the new subscription
+            // Calculate new expiry if it was paused
+            let newExpiry = newSub.expiry_date;
+            let updatePayload: any = { status: 'active', paused_at: null };
+
+            if (newSub.status === 'paused' && newSub.paused_at) {
+                const pausedAt = new Date(newSub.paused_at);
+                const now = new Date();
+                // Shift expiry by duration paused
+                const pauseDuration = now.getTime() - pausedAt.getTime();
+                const currentExpiry = new Date(newSub.expiry_date);
+                newExpiry = new Date(currentExpiry.getTime() + pauseDuration).toISOString();
+                updatePayload.expiry_date = newExpiry;
+            } else if (newSub.status !== 'active') { // e.g. newly approved pending?
+                // usually verify handles specific dates, but if we switch to an unprocessed one?
+                // For now assume switch is only between active/paused.
+            }
+
+            transaction.update(newSubRef, updatePayload);
+
+            // 4. Update Driver Profile
+            const driverRef = db.collection('drivers').doc(String(driverId));
+            transaction.update(driverRef, {
+                subscription_status: 'active',
+                active_subscription_id: subscription_id,
+                subscription_expiry: newExpiry
+            });
+        });
+
+        res.json({ success: true, message: 'Switched subscription successfully' });
+    } catch (error: any) {
+        res.status(400).json({ success: false, message: error.message });
+    }
+};
+
+// --- BACKGROUND JOB ---
+export const checkExpiredSubscriptions = async () => {
+    console.log('⏰ Running Subscription Expiry Check...');
+    const now = new Date().toISOString();
+
+    try {
+        const expiredSnapshot = await db.collection('driver_subscriptions')
+            .where('status', '==', 'active')
+            .where('expiry_date', '<', now)
+            .get();
+
+        if (expiredSnapshot.empty) return;
+
+        console.log(`Found ${expiredSnapshot.size} expired subscriptions.`);
+
+        const batch = db.batch();
+
+        for (const doc of expiredSnapshot.docs) {
+            const sub = doc.data();
+            const driverId = sub.driver_id;
+
+            // 1. Mark subscription as expired
+            batch.update(doc.ref, { status: 'expired' });
+
+            // 2. Check if driver has OTHER valid subscriptions (paused or active overlap?)
+            // We do NOT auto-switch, but we check availability to set the flag on the driver
+            const otherSubs = await db.collection('driver_subscriptions')
+                .where('driver_id', '==', driverId)
+                .where('status', 'in', ['paused']) // Check paused mainly
+                .get();
+
+            const hasBackup = !otherSubs.empty;
+
+            // 3. Update Driver Status
+            const driverRef = db.collection('drivers').doc(String(driverId));
+            batch.update(driverRef, {
+                subscription_status: 'expired',
+                is_online: false,
+                online_status: 'offline',
+                has_backup_subscription: hasBackup // Use this for UI prompt
+            });
+        }
+
+        await batch.commit();
+        console.log('✅ Updated expired subscriptions.');
+
+    } catch (error) {
+        console.error('❌ Subscription Cron Failed:', error);
+    }
+};
+
