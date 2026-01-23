@@ -260,7 +260,8 @@ export const adminToggleSubscriptionPause = async (req: Request, res: Response) 
                 // Check if this sub is the one that should update the driver's expiry
                 const driverRef = db.collection('drivers').doc(String(driverId));
                 transaction.update(driverRef, {
-                    subscription_expiry: newExpiry.toISOString()
+                    subscription_expiry: newExpiry.toISOString(),
+                    subscription_status: 'active'
                 });
             }
 
