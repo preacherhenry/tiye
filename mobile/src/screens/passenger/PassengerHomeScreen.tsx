@@ -8,6 +8,7 @@ import { Button } from '../../components/Button';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { CHIRUNDU_PLACES, Place } from '../../constants/places';
 
 const { width, height } = Dimensions.get('window');
 
@@ -56,6 +57,11 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
         fixedRoutes: []
     });
     const [hasValidPromos, setHasValidPromos] = useState(true); // Assume true until checked
+
+    // Autocomplete State
+    const [filteredPlaces, setFilteredPlaces] = useState<Place[]>([]);
+    const [activeInput, setActiveInput] = useState<'pickup' | 'destination' | null>(null);
+    const searchTimeout = useRef<any>(null);
 
     // Drawer State
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -328,6 +334,63 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                 longitudeDelta: 0.01,
             });
         }
+    };
+
+    // Autocomplete Logic
+    const handleSearch = (text: string, type: 'pickup' | 'destination') => {
+        if (type === 'pickup') setPickup(text);
+        else setDestination(text);
+
+        if (!text.trim()) {
+            setFilteredPlaces([]);
+            setActiveInput(null);
+            return;
+        }
+
+        setActiveInput(type);
+
+        // Debounce search
+        if (searchTimeout.current) clearTimeout(searchTimeout.current);
+        searchTimeout.current = setTimeout(() => {
+            const results = CHIRUNDU_PLACES.filter(place =>
+                place.name.toLowerCase().includes(text.toLowerCase())
+            ).sort((a, b) => {
+                // Exact match first, then starts with, then contains
+                const aName = a.name.toLowerCase();
+                const bName = b.name.toLowerCase();
+                const t = text.toLowerCase();
+                if (aName === t) return -1;
+                if (bName === t) return 1;
+                if (aName.startsWith(t) && !bName.startsWith(t)) return -1;
+                if (!aName.startsWith(t) && bName.startsWith(t)) return 1;
+                return aName.localeCompare(bName);
+            });
+            setFilteredPlaces(results);
+        }, 200);
+    };
+
+    const selectPlace = (place: Place) => {
+        if (activeInput === 'pickup') {
+            if (place.name === destination) {
+                Alert.alert("Invalid Selection", "Pickup and destination cannot be the same.");
+                return;
+            }
+            setPickup(place.name);
+            if (place.latitude && place.longitude) {
+                setPickupCoords({ latitude: place.latitude, longitude: place.longitude });
+            }
+        } else if (activeInput === 'destination') {
+            if (place.name === pickup) {
+                Alert.alert("Invalid Selection", "Pickup and destination cannot be the same.");
+                return;
+            }
+            setDestination(place.name);
+            if (place.latitude && place.longitude) {
+                setDestCoords({ latitude: place.latitude, longitude: place.longitude });
+            }
+        }
+        setFilteredPlaces([]);
+        setActiveInput(null);
     };
 
 
@@ -633,20 +696,81 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                 {(rideStatus === 'idle' || rideStatus === 'cancelled') && (
                     <View style={styles.searchBox}>
                         <Text style={styles.greeting}>Hi, {user?.name} 👋</Text>
-                        <TextInput
-                            placeholder="Pickup Location"
-                            style={styles.input}
-                            value={pickup}
-                            onChangeText={setPickup}
-                            placeholderTextColor={Colors.gray}
-                        />
-                        <TextInput
-                            placeholder="Destination"
-                            style={styles.input}
-                            value={destination}
-                            onChangeText={setDestination}
-                            placeholderTextColor={Colors.gray}
-                        />
+
+                        {/* Pickup Input Container */}
+                        <View style={{ zIndex: activeInput === 'pickup' ? 100 : 1 }}>
+                            <TextInput
+                                placeholder="Pickup Location"
+                                style={styles.input}
+                                value={pickup}
+                                onChangeText={(text) => handleSearch(text, 'pickup')}
+                                placeholderTextColor={Colors.gray}
+                                onFocus={() => pickup && handleSearch(pickup, 'pickup')}
+                            />
+                            {activeInput === 'pickup' && (
+                                <ScrollView style={styles.autocompleteDropdown} keyboardShouldPersistTaps="handled">
+                                    {filteredPlaces.length > 0 ? (
+                                        filteredPlaces.map((place, idx) => (
+                                            <TouchableOpacity
+                                                key={idx}
+                                                style={styles.autocompleteItem}
+                                                onPress={() => selectPlace(place)}
+                                            >
+                                                <Ionicons name="location-sharp" size={18} color={Colors.primary} />
+                                                <View style={{ marginLeft: 10 }}>
+                                                    <Text style={styles.placeName}>{place.name}</Text>
+                                                    <Text style={styles.placeCategory}>{place.category || 'Point of Interest'}</Text>
+                                                </View>
+                                            </TouchableOpacity>
+                                        ))
+                                    ) : (
+                                        pickup.trim().length > 0 && (
+                                            <View style={styles.noResultItem}>
+                                                <Text style={styles.noResultText}>No places found</Text>
+                                            </View>
+                                        )
+                                    )}
+                                </ScrollView>
+                            )}
+                        </View>
+
+                        {/* Destination Input Container */}
+                        <View style={{ zIndex: activeInput === 'destination' ? 100 : 1 }}>
+                            <TextInput
+                                placeholder="Destination"
+                                style={styles.input}
+                                value={destination}
+                                onChangeText={(text) => handleSearch(text, 'destination')}
+                                placeholderTextColor={Colors.gray}
+                                onFocus={() => destination && handleSearch(destination, 'destination')}
+                            />
+                            {activeInput === 'destination' && (
+                                <ScrollView style={styles.autocompleteDropdown} keyboardShouldPersistTaps="handled">
+                                    {filteredPlaces.length > 0 ? (
+                                        filteredPlaces.map((place, idx) => (
+                                            <TouchableOpacity
+                                                key={idx}
+                                                style={styles.autocompleteItem}
+                                                onPress={() => selectPlace(place)}
+                                            >
+                                                <Ionicons name="location-sharp" size={18} color={Colors.primary} />
+                                                <View style={{ marginLeft: 10 }}>
+                                                    <Text style={styles.placeName}>{place.name}</Text>
+                                                    <Text style={styles.placeCategory}>{place.category || 'Point of Interest'}</Text>
+                                                </View>
+                                            </TouchableOpacity>
+                                        ))
+                                    ) : (
+                                        destination.trim().length > 0 && (
+                                            <View style={styles.noResultItem}>
+                                                <Text style={styles.noResultText}>No places found</Text>
+                                            </View>
+                                        )
+                                    )}
+                                </ScrollView>
+                            )}
+                        </View>
+
                         <Button title="Find Ride" onPress={handleRequestPreview} />
                     </View>
                 )}
@@ -909,4 +1033,52 @@ const styles = StyleSheet.create({
     promoBtnText: { color: 'white', fontWeight: 'bold' },
     appliedPromoTag: { position: 'absolute', top: 15, right: 15, flexDirection: 'row', alignItems: 'center', backgroundColor: '#4CAF50' + '11', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, zIndex: 10 },
     appliedPromoText: { color: '#4CAF50', fontWeight: 'bold', marginLeft: 5, fontSize: 12 },
+
+    // Autocomplete Styles
+    autocompleteDropdown: {
+        backgroundColor: 'white',
+        maxHeight: 200,
+        borderRadius: 10,
+        marginTop: -10,
+        marginBottom: 10,
+        elevation: 5,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+        borderWidth: 1,
+        borderColor: '#eee',
+        position: 'absolute',
+        top: 55, // Based on input height
+        left: 0,
+        right: 0,
+        zIndex: 1000
+    },
+    autocompleteItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f9f9f9',
+    },
+    placeName: {
+        fontSize: 14,
+        fontWeight: 'bold',
+        color: Colors.text,
+    },
+    placeCategory: {
+        fontSize: 12,
+        color: Colors.gray,
+        textTransform: 'capitalize',
+    },
+    noResultItem: {
+        padding: 15,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    noResultText: {
+        color: Colors.gray,
+        fontSize: 14,
+        fontStyle: 'italic',
+    },
 });
