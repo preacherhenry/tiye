@@ -497,3 +497,83 @@ export const checkExpiredSubscriptions = async () => {
     }
 };
 
+// --- FAILSALE BACKGROUND JOB (Every 5 seconds) ---
+export const syncAllDriverSubscriptions = async () => {
+    const now = new Date().toISOString();
+
+    try {
+        const driversSnapshot = await db.collection('drivers').get();
+        if (driversSnapshot.empty) return;
+
+        const batch = db.batch();
+        let updateFound = false;
+
+        for (const driverDoc of driversSnapshot.docs) {
+            const driverId = driverDoc.id;
+            const driverData = driverDoc.data();
+
+            // Fetch all non-deleted subscriptions for this driver
+            const subsSnapshot = await db.collection('driver_subscriptions')
+                .where('driver_id', '==', driverId)
+                .where('status', '!=', 'deleted')
+                .get();
+
+            let targetStatus = 'none';
+            let bestExpiry: string | null = null;
+            let activeSubFound = false;
+            let pausedSubFound = false;
+            let expiredSubFound = false;
+
+            subsSnapshot.docs.forEach(subDoc => {
+                const sub = subDoc.data();
+                if (sub.status === 'active') {
+                    if (sub.expiry_date > now) {
+                        activeSubFound = true;
+                        if (!bestExpiry || sub.expiry_date > bestExpiry) {
+                            bestExpiry = sub.expiry_date;
+                        }
+                    } else {
+                        expiredSubFound = true;
+                    }
+                } else if (sub.status === 'paused') {
+                    pausedSubFound = true;
+                }
+            });
+
+            if (activeSubFound) {
+                targetStatus = 'active';
+            } else if (pausedSubFound) {
+                targetStatus = 'paused';
+            } else if (expiredSubFound) {
+                targetStatus = 'expired';
+            }
+
+            // Sync if profile is inconsistent
+            const statusMismatch = driverData.subscription_status !== targetStatus;
+            const expiryMismatch = targetStatus === 'active' && driverData.subscription_expiry !== bestExpiry;
+
+            if (statusMismatch || expiryMismatch) {
+                const updateData: any = {
+                    subscription_status: targetStatus,
+                    subscription_expiry: bestExpiry
+                };
+
+                if (targetStatus !== 'active') {
+                    updateData.is_online = false;
+                    updateData.online_status = 'offline';
+                }
+
+                batch.update(driverDoc.ref, updateData);
+                updateFound = true;
+                console.log(`♻️ Syncing Driver ${driverId} to ${targetStatus}`);
+            }
+        }
+
+        if (updateFound) {
+            await batch.commit();
+        }
+
+    } catch (error) {
+        console.error('❌ Subscription Sync Job Failed:', error);
+    }
+};

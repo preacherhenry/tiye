@@ -61,15 +61,15 @@ app.get('/', (req: Request, res: Response) => {
     res.json({ status: "Taxi node backend running" });
 });
 
-import { checkExpiredSubscriptions } from './controllers/subscriptionController';
+import { syncAllDriverSubscriptions } from './controllers/subscriptionController';
 
 if (require.main === module) {
     app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
 
         // Start Background Jobs
-        console.log('⏰ Starting Subscription Cron (every 30s)...');
-        setInterval(checkExpiredSubscriptions, 30 * 1000); // 30 seconds
+        console.log('⏰ Starting 5s Subscription Failsafe Sync...');
+        setInterval(syncAllDriverSubscriptions, 5000);
     });
 }
 
