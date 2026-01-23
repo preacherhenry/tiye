@@ -866,7 +866,10 @@ export const getPassengerProfile = async (req: Request, res: Response) => {
     try {
         // 1. Get User Details
         const userDoc = await db.collection('users').doc(id).get();
+        console.log(`🔍 [getPassengerProfile] Exists: ${userDoc.exists}, Role: ${userDoc.data()?.role}`);
+
         if (!userDoc.exists || userDoc.data()?.role !== 'passenger') {
+            console.log('❌ [getPassengerProfile] Passenger not found or invalid role');
             return res.json({ success: false, message: 'Passenger not found' });
         }
 
@@ -880,7 +883,6 @@ export const getPassengerProfile = async (req: Request, res: Response) => {
         // 2. Get Ride History
         const ridesSnapshot = await db.collection('ride_requests')
             .where('passenger_id', '==', id)
-            .orderBy('created_at', 'desc')
             .get();
 
         const trips = await Promise.all(ridesSnapshot.docs.map(async (doc) => {
@@ -896,6 +898,9 @@ export const getPassengerProfile = async (req: Request, res: Response) => {
                 driver_name: driverName
             };
         }));
+
+        // Sort in memory
+        trips.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
         // 3. Get Stats
         const stats = {
