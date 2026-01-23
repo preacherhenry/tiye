@@ -241,7 +241,7 @@ export const getAnalyticsStats = async (req: Request, res: Response) => {
         // Note: For large datasets, this should use Firebase Extensions for aggregation
         // but for this migration we will do it in code.
         const usersSnapshot = await db.collection('users').get();
-        const ridesSnapshot = await db.collection('ride_requests').get();
+        const ridesSnapshot = await db.collection('rides').get();
         const appSnapshot = await db.collection('driver_applications').get();
 
         // 2. Format user distribution
@@ -317,7 +317,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
         // Fetch data for dashboard
         const appSnapshot = await db.collection('driver_applications').get();
         const usersSnapshot = await db.collection('users').get();
-        const ridesSnapshot = await db.collection('ride_requests').where('status', '==', 'completed').get();
+        const ridesSnapshot = await db.collection('rides').where('status', '==', 'completed').get();
         const onlineDriversSnapshot = await db.collection('drivers').where('online_status', '!=', 'offline').get();
 
         let revenue = 0;
@@ -393,7 +393,7 @@ export const getAllDrivers = async (req: Request, res: Response) => {
             const driverData = driverDoc.data() || {};
 
             // Count completed trips
-            const tripsSnapshot = await db.collection('ride_requests')
+            const tripsSnapshot = await db.collection('rides')
                 .where('driver_id', '==', userDoc.id)
                 .where('status', '==', 'completed')
                 .get();
@@ -488,7 +488,7 @@ export const getDriverProfile = async (req: Request, res: Response) => {
         // 2. Active Trip Check (Wrapped in try/catch to avoid Index erors crashing profile)
         let activeTrip = null;
         try {
-            const activeTripSnapshot = await db.collection('ride_requests')
+            const activeTripSnapshot = await db.collection('rides')
                 .where('driver_id', '==', id)
                 .where('status', 'in', ['accepted', 'arrived', 'picked_up'])
                 .limit(1)
@@ -511,7 +511,7 @@ export const getDriverProfile = async (req: Request, res: Response) => {
         (driver as any).realTimeStatus = realTimeStatus;
 
         // 3. Earnings & Trip Counts
-        const allTripsSnapshot = await db.collection('ride_requests')
+        const allTripsSnapshot = await db.collection('rides')
             .where('driver_id', '==', id)
             .get();
 
@@ -532,7 +532,7 @@ export const getDriverProfile = async (req: Request, res: Response) => {
         });
 
         // 4. Trip History (Index-safe version: removed orderBy)
-        const tripHistorySnapshot = await db.collection('ride_requests')
+        const tripHistorySnapshot = await db.collection('rides')
             .where('driver_id', '==', id)
             // .orderBy('created_at', 'desc') // Requires Index
             .limit(50)
@@ -589,7 +589,7 @@ export const getTripDetails = async (req: Request, res: Response) => {
     const { id } = req.params;
 
     try {
-        const rideRef = db.collection('ride_requests').doc(id);
+        const rideRef = db.collection('rides').doc(id);
         const rideDoc = await rideRef.get();
 
         if (!rideDoc.exists) {
@@ -597,15 +597,15 @@ export const getTripDetails = async (req: Request, res: Response) => {
         }
 
         const tripData = rideDoc.data()!;
-        const passengerDoc = await db.collection('users').doc(tripData.passenger_id).get();
+        const passengerDoc = await db.collection('users').doc(String(tripData.passenger_id)).get();
         const passengerData = passengerDoc.data() || {};
 
         let driverData = {};
         let driverProfileData = {};
         if (tripData.driver_id) {
-            const dUserDoc = await db.collection('users').doc(tripData.driver_id).get();
+            const dUserDoc = await db.collection('users').doc(String(tripData.driver_id)).get();
             driverData = dUserDoc.data() || {};
-            const dProfileDoc = await db.collection('drivers').doc(tripData.driver_id).get();
+            const dProfileDoc = await db.collection('drivers').doc(String(tripData.driver_id)).get();
             driverProfileData = dProfileDoc.data() || {};
         }
 
@@ -819,7 +819,7 @@ export const getPassengers = async (req: Request, res: Response) => {
 
         const passengers = await Promise.all(querySnapshot.docs.map(async (doc) => {
             const userData = doc.data();
-            const tripsSnapshot = await db.collection('ride_requests')
+            const tripsSnapshot = await db.collection('rides')
                 .where('passenger_id', '==', doc.id)
                 .get();
 
@@ -881,7 +881,7 @@ export const getPassengerProfile = async (req: Request, res: Response) => {
         };
 
         // 2. Get Ride History
-        const ridesSnapshot = await db.collection('ride_requests')
+        const ridesSnapshot = await db.collection('rides')
             .where('passenger_id', '==', id)
             .get();
 
