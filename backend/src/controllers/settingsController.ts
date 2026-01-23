@@ -1,14 +1,14 @@
 import { Request, Response } from 'express';
-import pool from '../config/db';
-import { RowDataPacket } from 'mysql2';
+import { db } from '../config/firebase';
 
 export const getSettings = async (req: Request, res: Response) => {
-    console.log(`[${new Date().toISOString()}] ⚙️ Fetching settings...`);
+    console.log(`[${new Date().toISOString()}] ⚙️ Fetching settings from Firestore...`);
     try {
-        const [rows] = await pool.execute<RowDataPacket[]>('SELECT key_name, value FROM settings');
-        const settings: { [key: string]: string } = {};
-        rows.forEach(row => {
-            settings[row.key_name] = row.value;
+        const snapshot = await db.collection('settings').get();
+        const settings: { [key: string]: any } = {};
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            settings[doc.id] = data.value;
         });
         res.json({ success: true, settings });
     } catch (error: any) {
@@ -23,23 +23,17 @@ export const updateSettings = async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, message: 'Invalid settings data' });
     }
 
-    const connection = await pool.getConnection();
     try {
-        await connection.beginTransaction();
+        const batch = db.batch();
 
         for (const [key, value] of Object.entries(settings)) {
-            await connection.execute(
-                'INSERT INTO settings (key_name, value) VALUES (?, ?) ON DUPLICATE KEY UPDATE value = ?',
-                [key, value, value]
-            );
+            const docRef = db.collection('settings').doc(key);
+            batch.set(docRef, { value, updated_at: new Date().toISOString() }, { merge: true });
         }
 
-        await connection.commit();
+        await batch.commit();
         res.json({ success: true, message: 'Settings updated successfully' });
     } catch (error: any) {
-        await connection.rollback();
         res.status(500).json({ success: false, message: error.message });
-    } finally {
-        connection.release();
     }
 };

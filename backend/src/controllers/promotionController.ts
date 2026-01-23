@@ -1,75 +1,96 @@
 import { Request, Response } from 'express';
-import pool from '../config/db';
+import { db } from '../config/firebase';
 
 export const createPromotion = async (req: Request, res: Response) => {
     const { code, title, description, discount_type, discount_value, expiry_date } = req.body;
 
     try {
-        const [result] = await pool.query(
-            'INSERT INTO promotions (code, title, description, discount_type, discount_value, expiry_date) VALUES (?, ?, ?, ?, ?, ?)',
-            [code.toUpperCase(), title, description, discount_type, discount_value, expiry_date]
-        );
-        res.status(201).json({ success: true, message: 'Promotion created successfully', promotionId: (result as any).insertId });
-    } catch (error: any) {
-        if (error.code === 'ER_DUP_ENTRY') {
+        const promoCodeUpper = code.toUpperCase();
+
+        // Check for duplicate
+        const existing = await db.collection('promotions').where('code', '==', promoCodeUpper).get();
+        if (!existing.empty) {
             return res.status(400).json({ success: false, message: 'Promocode already exists' });
         }
+
+        const docRef = await db.collection('promotions').add({
+            code: promoCodeUpper,
+            title,
+            description,
+            discount_type,
+            discount_value: parseFloat(discount_value),
+            expiry_date,
+            status: 'active',
+            created_at: new Date().toISOString()
+        });
+
+        res.status(201).json({ success: true, message: 'Promotion created successfully', promotionId: docRef.id });
+    } catch (error: any) {
         console.error('Error creating promotion:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({ success: false, message: 'Server error: ' + error.message });
     }
 };
 
 export const getAllPromotions = async (req: Request, res: Response) => {
     try {
-        const [rows] = await pool.query('SELECT * FROM promotions ORDER BY created_at DESC');
-        res.json({ success: true, promotions: rows });
-    } catch (error) {
+        const snapshot = await db.collection('promotions').orderBy('created_at', 'desc').get();
+        const promotions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        res.json({ success: true, promotions: promotions });
+    } catch (error: any) {
         console.error('Error fetching promotions:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({ success: false, message: 'Server error: ' + error.message });
     }
 };
 
 export const deletePromotion = async (req: Request, res: Response) => {
     const { id } = req.params;
     try {
-        await pool.query('DELETE FROM promotions WHERE id = ?', [id]);
+        await db.collection('promotions').doc(id).delete();
         res.json({ success: true, message: 'Promotion deleted successfully' });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error deleting promotion:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({ success: false, message: 'Server error: ' + error.message });
     }
 };
 
 export const validatePromocode = async (req: Request, res: Response) => {
     const { code, userId } = req.body;
     try {
-        // 1. Check if promotion exists and is active
-        const [promotions]: any = await pool.query(
-            'SELECT * FROM promotions WHERE code = ? AND status = "active" AND expiry_date > NOW()',
-            [code.toUpperCase()]
-        );
+        const promoCodeUpper = code.toUpperCase();
 
-        if (promotions.length === 0) {
+        // 1. Check if promotion exists and is active
+        const snapshot = await db.collection('promotions')
+            .where('code', '==', promoCodeUpper)
+            .where('status', '==', 'active')
+            .get();
+
+        if (snapshot.empty) {
             return res.status(404).json({ success: false, message: 'Invalid or expired promocode' });
         }
 
-        const promo = promotions[0];
+        const promoDoc = snapshot.docs[0];
+        const promo = { id: promoDoc.id, ...promoDoc.data() } as any;
+
+        // Check expiry date
+        if (new Date(promo.expiry_date) < new Date()) {
+            return res.status(404).json({ success: false, message: 'Invalid or expired promocode' });
+        }
 
         // 2. Check if user already used this promocode
         if (userId) {
-            const [usage]: any = await pool.query(
-                'SELECT * FROM promotion_usage WHERE promotion_id = ? AND user_id = ?',
-                [promo.id, userId]
-            );
+            const usageSnapshot = await db.collection('promotion_usage')
+                .where('promotion_id', '==', promo.id)
+                .where('user_id', '==', userId)
+                .get();
 
-            if (usage.length > 0) {
+            if (!usageSnapshot.empty) {
                 return res.status(400).json({ success: false, message: 'You have already used this promocode' });
             }
         }
 
         res.json({ success: true, promotion: promo });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error validating promocode:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({ success: false, message: 'Server error: ' + error.message });
     }
 };

@@ -1,5 +1,4 @@
-import pool from './db';
-import { RowDataPacket } from 'mysql2';
+import { db } from './firebase';
 
 export interface ServiceZone {
     name: string;
@@ -52,10 +51,19 @@ export const isLocationInServiceArea = async (lat: number, lng: number): Promise
     const R = 6371;
 
     try {
-        // 1. Try to get zones from DB
-        const [rows] = await pool.execute<RowDataPacket[]>('SELECT lat, lng, radius_km as radiusKm FROM zones WHERE status = "active"');
+        // 1. Try to get zones from Firestore
+        const snapshot = await db.collection('zones').where('status', '==', 'active').get();
+        const zones: ServiceZone[] = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                name: data.name,
+                lat: data.lat,
+                lng: data.lng,
+                radiusKm: data.radius_km
+            };
+        });
 
-        let zonesToCheck = rows.length > 0 ? (rows as ServiceZone[]) : SERVICE_ZONES;
+        let zonesToCheck = zones.length > 0 ? zones : SERVICE_ZONES;
 
         for (const zone of zonesToCheck) {
             const dLat = deg2rad(lat - zone.lat);

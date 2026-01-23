@@ -1,12 +1,12 @@
 import { Request, Response } from 'express';
-import pool from '../config/db';
-import { ResultSetHeader, RowDataPacket } from 'mysql2';
+import { db } from '../config/firebase';
 
 // ZONES
 export const getZones = async (req: Request, res: Response) => {
     try {
-        const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM zones ORDER BY created_at DESC');
-        res.json({ success: true, zones: rows });
+        const snapshot = await db.collection('zones').orderBy('created_at', 'desc').get();
+        const zones = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        res.json({ success: true, zones });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -18,11 +18,15 @@ export const createZone = async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
     try {
-        const [result] = await pool.execute<ResultSetHeader>(
-            'INSERT INTO zones (name, lat, lng, radius_km) VALUES (?, ?, ?, ?)',
-            [name, lat, lng, radius_km]
-        );
-        res.status(201).json({ success: true, message: 'Zone created successfully', zoneId: result.insertId });
+        const docRef = await db.collection('zones').add({
+            name,
+            lat: parseFloat(lat),
+            lng: parseFloat(lng),
+            radius_km: parseFloat(radius_km),
+            status: 'active',
+            created_at: new Date().toISOString()
+        });
+        res.status(201).json({ success: true, message: 'Zone created successfully', zoneId: docRef.id });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -32,10 +36,15 @@ export const updateZone = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { name, lat, lng, radius_km, status } = req.body;
     try {
-        await pool.execute(
-            'UPDATE zones SET name = ?, lat = ?, lng = ?, radius_km = ?, status = ? WHERE id = ?',
-            [name, lat, lng, radius_km, status, id]
-        );
+        const updateData: any = {};
+        if (name) updateData.name = name;
+        if (lat) updateData.lat = parseFloat(lat);
+        if (lng) updateData.lng = parseFloat(lng);
+        if (radius_km) updateData.radius_km = parseFloat(radius_km);
+        if (status) updateData.status = status;
+        updateData.updated_at = new Date().toISOString();
+
+        await db.collection('zones').doc(id).update(updateData);
         res.json({ success: true, message: 'Zone updated successfully' });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -45,7 +54,7 @@ export const updateZone = async (req: Request, res: Response) => {
 export const deleteZone = async (req: Request, res: Response) => {
     const { id } = req.params;
     try {
-        await pool.execute('DELETE FROM zones WHERE id = ?', [id]);
+        await db.collection('zones').doc(id).delete();
         res.json({ success: true, message: 'Zone deleted successfully' });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -55,15 +64,9 @@ export const deleteZone = async (req: Request, res: Response) => {
 // FIXED ROUTES
 export const getFixedRoutes = async (req: Request, res: Response) => {
     try {
-        const query = `
-            SELECT fr.*, z1.name as pickup_zone_name, z2.name as dest_zone_name 
-            FROM fixed_routes fr
-            JOIN zones z1 ON fr.pickup_zone_id = z1.id
-            JOIN zones z2 ON fr.dest_zone_id = z2.id
-            ORDER BY fr.created_at DESC
-        `;
-        const [rows] = await pool.execute<RowDataPacket[]>(query);
-        res.json({ success: true, fixedRoutes: rows });
+        const snapshot = await db.collection('fixed_routes').orderBy('created_at', 'desc').get();
+        const fixedRoutes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        res.json({ success: true, fixedRoutes });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -75,11 +78,21 @@ export const createFixedRoute = async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
     try {
-        const [result] = await pool.execute<ResultSetHeader>(
-            'INSERT INTO fixed_routes (name, pickup_zone_id, dest_zone_id, fixed_price) VALUES (?, ?, ?, ?)',
-            [name, pickup_zone_id, dest_zone_id, fixed_price]
-        );
-        res.status(201).json({ success: true, message: 'Fixed route created successfully', routeId: result.insertId });
+        // Fetch zone names for denormalization (optional but helpful for display)
+        const pZone = await db.collection('zones').doc(pickup_zone_id).get();
+        const dZone = await db.collection('zones').doc(dest_zone_id).get();
+
+        const docRef = await db.collection('fixed_routes').add({
+            name,
+            pickup_zone_id,
+            dest_zone_id,
+            pickup_zone_name: pZone.exists ? pZone.data()?.name : 'Unknown',
+            dest_zone_name: dZone.exists ? dZone.data()?.name : 'Unknown',
+            fixed_price: parseFloat(fixed_price),
+            status: 'active',
+            created_at: new Date().toISOString()
+        });
+        res.status(201).json({ success: true, message: 'Fixed route created successfully', routeId: docRef.id });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -89,10 +102,23 @@ export const updateFixedRoute = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { name, pickup_zone_id, dest_zone_id, fixed_price, status } = req.body;
     try {
-        await pool.execute(
-            'UPDATE fixed_routes SET name = ?, pickup_zone_id = ?, dest_zone_id = ?, fixed_price = ?, status = ? WHERE id = ?',
-            [name, pickup_zone_id, dest_zone_id, fixed_price, status, id]
-        );
+        const updateData: any = {};
+        if (name) updateData.name = name;
+        if (pickup_zone_id) {
+            updateData.pickup_zone_id = pickup_zone_id;
+            const pZone = await db.collection('zones').doc(pickup_zone_id).get();
+            if (pZone.exists) updateData.pickup_zone_name = pZone.data()?.name;
+        }
+        if (dest_zone_id) {
+            updateData.dest_zone_id = dest_zone_id;
+            const dZone = await db.collection('zones').doc(dest_zone_id).get();
+            if (dZone.exists) updateData.dest_zone_name = dZone.data()?.name;
+        }
+        if (fixed_price) updateData.fixed_price = parseFloat(fixed_price);
+        if (status) updateData.status = status;
+        updateData.updated_at = new Date().toISOString();
+
+        await db.collection('fixed_routes').doc(id).update(updateData);
         res.json({ success: true, message: 'Fixed route updated successfully' });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -102,7 +128,7 @@ export const updateFixedRoute = async (req: Request, res: Response) => {
 export const deleteFixedRoute = async (req: Request, res: Response) => {
     const { id } = req.params;
     try {
-        await pool.execute('DELETE FROM fixed_routes WHERE id = ?', [id]);
+        await db.collection('fixed_routes').doc(id).delete();
         res.json({ success: true, message: 'Fixed route deleted successfully' });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -113,23 +139,26 @@ export const deleteFixedRoute = async (req: Request, res: Response) => {
 export const getFareConfig = async (req: Request, res: Response) => {
     try {
         // 1. Get standard settings
-        const [sRows] = await pool.execute<RowDataPacket[]>('SELECT key_name, value FROM settings');
-        const settings: { [key: string]: string } = {};
-        sRows.forEach(row => {
-            settings[row.key_name] = row.value;
+        const sSnapshot = await db.collection('settings').get();
+        const settings: { [key: string]: any } = {};
+        sSnapshot.forEach(doc => {
+            const data = doc.data();
+            settings[doc.id] = data.value;
         });
 
         // 2. Get active zones
-        const [zRows] = await pool.execute<RowDataPacket[]>('SELECT * FROM zones WHERE status = "active"');
+        const zSnapshot = await db.collection('zones').where('status', '==', 'active').get();
+        const zones = zSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         // 3. Get active fixed routes
-        const [frRows] = await pool.execute<RowDataPacket[]>('SELECT * FROM fixed_routes WHERE status = "active"');
+        const frSnapshot = await db.collection('fixed_routes').where('status', '==', 'active').get();
+        const fixedRoutes = frSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         res.json({
             success: true,
             settings,
-            zones: zRows,
-            fixedRoutes: frRows
+            zones: zones,
+            fixedRoutes: fixedRoutes
         });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
