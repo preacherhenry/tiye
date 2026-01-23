@@ -231,6 +231,14 @@ export const adminToggleSubscriptionPause = async (req: Request, res: Response) 
                     status: 'paused',
                     paused_at: new Date().toISOString()
                 });
+
+                // Immediately block the driver when pausing
+                const driverRef = db.collection('drivers').doc(String(driverId));
+                transaction.update(driverRef, {
+                    subscription_status: 'paused',
+                    is_online: false,
+                    online_status: 'offline'
+                });
             } else {
                 if (sub.status !== 'paused') {
                     return { success: false, message: 'Subscription is not paused' };
