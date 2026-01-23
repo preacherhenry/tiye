@@ -68,8 +68,8 @@ if (require.main === module) {
         console.log(`Server running on port ${PORT}`);
 
         // Start Background Jobs
-        console.log('⏰ Starting 5s Subscription Failsafe Sync...');
-        setInterval(syncAllDriverSubscriptions, 5000);
+        console.log('⏰ Starting 10m Subscription Failsafe Sync...');
+        setInterval(syncAllDriverSubscriptions, 600000); // 10 minutes
     });
 }
 
