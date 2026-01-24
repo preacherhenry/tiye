@@ -1,4 +1,4 @@
-import React from 'react';
+import React from 'react'; // icon fix v2
 import { NavLink } from 'react-router-dom';
 import {
     BarChart3,
