@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 
 interface Admin {
-    id: number;
+    id: string;
     name: string;
     email: string;
     phone: string;
@@ -74,7 +74,7 @@ const AdminPanel: React.FC = () => {
         }
     };
 
-    const handleUpdateRole = async (id: number, currentRole: string) => {
+    const handleUpdateRole = async (id: string, currentRole: string) => {
         const newRole = currentRole === 'admin' ? 'super_admin' : 'admin';
         try {
             await api.post(`/admin/admins/${id}/role`, { role: newRole });
@@ -84,7 +84,7 @@ const AdminPanel: React.FC = () => {
         }
     };
 
-    const handleToggleStatus = async (id: number, currentStatus: string) => {
+    const handleToggleStatus = async (id: string, currentStatus: string) => {
         const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
         if (!window.confirm(`Are you sure you want to ${newStatus === 'active' ? 'enable' : 'disable'} this admin?`)) return;
 

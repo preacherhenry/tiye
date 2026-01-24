@@ -45,7 +45,7 @@ const Sidebar: React.FC = () => {
                 <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary/60 rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
                     <span className="text-black font-black text-xl">T</span>
                 </div>
-                <h1 className="text-xl font-bold tracking-tight">Tiye Admin v2.1</h1>
+                <h1 className="text-xl font-bold tracking-tight">Tiye Admin</h1>
             </div>
 
             <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto custom-scrollbar">
