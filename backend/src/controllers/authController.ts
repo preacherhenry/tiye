@@ -77,22 +77,24 @@ export const register = async (req: Request, res: Response) => {
 };
 
 export const login = async (req: Request, res: Response) => {
-    const { identifier, password } = req.body;
-    console.log(`Login attempt for: ${identifier}`);
+    const { identifier, password, email } = req.body;
+    const loginIdentifier = identifier || email;
 
-    if (!identifier || !password) {
+    console.log(`Login attempt for: ${loginIdentifier}`);
+
+    if (!loginIdentifier || !password) {
         return res.json({ success: false, message: 'Username/Email and Password are required' });
     }
 
     try {
-        const idLower = identifier.toLowerCase().trim();
+        const idLower = loginIdentifier.toLowerCase().trim();
 
         // Try searching by username_lower OR email
         let userQuery = await db.collection('users').where('username_lower', '==', idLower).limit(1).get();
 
         if (userQuery.empty) {
             // Fallback: check email
-            userQuery = await db.collection('users').where('email', '==', identifier).limit(1).get();
+            userQuery = await db.collection('users').where('email', '==', loginIdentifier).limit(1).get();
         }
 
         if (userQuery.empty) {
