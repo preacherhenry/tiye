@@ -60,6 +60,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
 
     // Autocomplete State
     const [filteredPlaces, setFilteredPlaces] = useState<Place[]>([]);
+    const [dynamicPlaces, setDynamicPlaces] = useState<Place[]>([]);
     const [activeInput, setActiveInput] = useState<'pickup' | 'destination' | null>(null);
     const searchTimeout = useRef<any>(null);
 
@@ -179,7 +180,19 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
 
     useEffect(() => {
         fetchSettings();
+        fetchDynamicPlaces();
     }, []);
+
+    const fetchDynamicPlaces = async () => {
+        try {
+            const res = await api.get('/places');
+            if (res.data.success) {
+                setDynamicPlaces(res.data.places);
+            }
+        } catch (e) {
+            console.log("Failed to fetch dynamic places", e);
+        }
+    };
 
     // Check if user has any valid, unused promos
     useEffect(() => {
@@ -352,7 +365,8 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
         // Debounce search
         if (searchTimeout.current) clearTimeout(searchTimeout.current);
         searchTimeout.current = setTimeout(() => {
-            const results = CHIRUNDU_PLACES.filter(place =>
+            const allPlaces = [...CHIRUNDU_PLACES, ...dynamicPlaces];
+            const results = allPlaces.filter(place =>
                 place.name.toLowerCase().includes(text.toLowerCase())
             ).sort((a, b) => {
                 // Exact match first, then starts with, then contains
@@ -378,6 +392,8 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
             setPickup(place.name);
             if (place.latitude && place.longitude) {
                 setPickupCoords({ latitude: place.latitude, longitude: place.longitude });
+            } else {
+                setPickupCoords(null); // Force geocode in handleRequestPreview
             }
         } else if (activeInput === 'destination') {
             if (place.name === pickup) {
@@ -387,6 +403,8 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
             setDestination(place.name);
             if (place.latitude && place.longitude) {
                 setDestCoords({ latitude: place.latitude, longitude: place.longitude });
+            } else {
+                setDestCoords(null); // Force geocode in handleRequestPreview
             }
         }
         setFilteredPlaces([]);
@@ -640,7 +658,8 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
     return (
         <KeyboardAvoidingView
             style={styles.container}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            behavior={Platform.OS === "ios" ? "padding" : "padding"}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
         >
             {/* Map Layer */}
             <View style={StyleSheet.absoluteFillObject}>
@@ -708,7 +727,12 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                                 onFocus={() => pickup && handleSearch(pickup, 'pickup')}
                             />
                             {activeInput === 'pickup' && (
-                                <ScrollView style={styles.autocompleteDropdown} keyboardShouldPersistTaps="handled">
+                                <ScrollView
+                                    style={styles.autocompleteDropdown}
+                                    keyboardShouldPersistTaps="handled"
+                                    showsVerticalScrollIndicator={true}
+                                    nestedScrollEnabled={true}
+                                >
                                     {filteredPlaces.length > 0 ? (
                                         filteredPlaces.map((place, idx) => (
                                             <TouchableOpacity
@@ -725,9 +749,16 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                                         ))
                                     ) : (
                                         pickup.trim().length > 0 && (
-                                            <View style={styles.noResultItem}>
-                                                <Text style={styles.noResultText}>No places found</Text>
-                                            </View>
+                                            <TouchableOpacity
+                                                style={styles.noResultItem}
+                                                onPress={() => selectPlace({ name: pickup, category: 'Manual' } as any)}
+                                            >
+                                                <Ionicons name="search-outline" size={20} color={Colors.gray} />
+                                                <View style={{ marginLeft: 10 }}>
+                                                    <Text style={styles.noResultText}>No saved location found</Text>
+                                                    <Text style={[styles.placeCategory, { color: Colors.primary, marginTop: 2 }]}>Tap to search for "{pickup}" anyway</Text>
+                                                </View>
+                                            </TouchableOpacity>
                                         )
                                     )}
                                 </ScrollView>
@@ -745,7 +776,12 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                                 onFocus={() => destination && handleSearch(destination, 'destination')}
                             />
                             {activeInput === 'destination' && (
-                                <ScrollView style={styles.autocompleteDropdown} keyboardShouldPersistTaps="handled">
+                                <ScrollView
+                                    style={styles.autocompleteDropdown}
+                                    keyboardShouldPersistTaps="handled"
+                                    showsVerticalScrollIndicator={true}
+                                    nestedScrollEnabled={true}
+                                >
                                     {filteredPlaces.length > 0 ? (
                                         filteredPlaces.map((place, idx) => (
                                             <TouchableOpacity
@@ -762,9 +798,16 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                                         ))
                                     ) : (
                                         destination.trim().length > 0 && (
-                                            <View style={styles.noResultItem}>
-                                                <Text style={styles.noResultText}>No places found</Text>
-                                            </View>
+                                            <TouchableOpacity
+                                                style={styles.noResultItem}
+                                                onPress={() => selectPlace({ name: destination, category: 'Manual' } as any)}
+                                            >
+                                                <Ionicons name="search-outline" size={20} color={Colors.gray} />
+                                                <View style={{ marginLeft: 10 }}>
+                                                    <Text style={styles.noResultText}>No saved location found</Text>
+                                                    <Text style={[styles.placeCategory, { color: Colors.primary, marginTop: 2 }]}>Tap to search for "{destination}" anyway</Text>
+                                                </View>
+                                            </TouchableOpacity>
                                         )
                                     )}
                                 </ScrollView>
@@ -1036,7 +1079,7 @@ const styles = StyleSheet.create({
 
     // Autocomplete Styles
     autocompleteDropdown: {
-        maxHeight: 200,
+        maxHeight: 160,
         borderRadius: 12,
         marginTop: 5,
         marginBottom: 10,
@@ -1072,9 +1115,9 @@ const styles = StyleSheet.create({
         textTransform: 'capitalize',
     },
     noResultItem: {
+        flexDirection: 'row',
         padding: 15,
         alignItems: 'center',
-        justifyContent: 'center',
     },
     noResultText: {
         color: Colors.gray,

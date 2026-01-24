@@ -12,7 +12,8 @@ import {
     User,
     Tag,
     CreditCard,
-    Map
+    Map,
+    MapPin
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -29,6 +30,7 @@ const Sidebar: React.FC = () => {
         { icon: Tag, label: 'Promotions', path: '/promotions' },
         { icon: CreditCard, label: 'Subscriptions', path: '/subscriptions' },
         { icon: Map, label: 'Fares', path: '/fares' },
+        { icon: MapPin, label: 'Places', path: '/places' },
     ];
 
     if (user?.role === 'super_admin') {

@@ -17,6 +17,7 @@ import Settings from './pages/Settings';
 import Promotions from './pages/Promotions';
 import Subscriptions from './pages/Subscriptions';
 import Fares from './pages/Fares';
+import Places from './pages/Places';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -65,6 +66,7 @@ const App: React.FC = () => {
             <Route path="promotions" element={<Promotions />} />
             <Route path="subscriptions" element={<Subscriptions />} />
             <Route path="fares" element={<Fares />} />
+            <Route path="places" element={<Places />} />
             <Route path="settings" element={<Settings />} />
           </Route>
           <Route

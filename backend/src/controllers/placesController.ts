@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { db } from '../config/firebase';
 const fetch = require('node-fetch');
 
 export const searchPlaces = async (req: Request, res: Response): Promise<void> => {
@@ -87,5 +88,62 @@ export const reverseGeocode = async (req: Request, res: Response): Promise<void>
             message: 'Failed to reverse geocode',
             error: error instanceof Error ? error.message : String(error)
         });
+    }
+};
+export const getAllPlaces = async (req: Request, res: Response) => {
+    try {
+        const snapshot = await db.collection('places').orderBy('name').get();
+        const places = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        res.json({ success: true, places });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const addPlace = async (req: Request, res: Response) => {
+    try {
+        const { name, latitude, longitude, category, area } = req.body;
+        if (!name || !latitude || !longitude) {
+            return res.status(400).json({ success: false, message: 'Missing required fields' });
+        }
+
+        const placeData = {
+            name,
+            latitude: parseFloat(latitude),
+            longitude: parseFloat(longitude),
+            category: category || 'landmark',
+            area: area || '',
+            created_at: new Date().toISOString()
+        };
+
+        const docRef = await db.collection('places').add(placeData);
+        res.json({ success: true, id: docRef.id, message: 'Place added successfully' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const updatePlace = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+
+        if (updates.latitude) updates.latitude = parseFloat(updates.latitude);
+        if (updates.longitude) updates.longitude = parseFloat(updates.longitude);
+
+        await db.collection('places').doc(id).update(updates);
+        res.json({ success: true, message: 'Place updated successfully' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const deletePlace = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        await db.collection('places').doc(id).delete();
+        res.json({ success: true, message: 'Place deleted successfully' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
     }
 };
