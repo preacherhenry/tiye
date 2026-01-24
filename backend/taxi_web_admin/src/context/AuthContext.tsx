@@ -2,9 +2,10 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../services/api';
 
 interface User {
-    id: number;
+    id: string;
+    username: string;
     name: string;
-    email: string;
+    email: string | null;
     phone?: string;
     role: string;
     profile_photo?: string;
@@ -13,7 +14,7 @@ interface User {
 interface AuthContextType {
     user: User | null;
     loading: boolean;
-    login: (email: string, password: string) => Promise<boolean>;
+    login: (identifier: string, password: string) => Promise<boolean>;
     logout: () => void;
 }
 
@@ -31,9 +32,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
     }, []);
 
-    const login = async (email: string, password: string) => {
+    const login = async (identifier: string, password: string) => {
         try {
-            const res = await api.post('/login', { email, password });
+            const res = await api.post('/login', { identifier, password });
             if (res.data.success && (res.data.user.role === 'admin' || res.data.user.role === 'super_admin')) {
                 setUser(res.data.user);
                 localStorage.setItem('admin_token', res.data.token);

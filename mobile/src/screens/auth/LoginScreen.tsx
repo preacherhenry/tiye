@@ -5,17 +5,17 @@ import { Colors } from '../../constants/colors';
 
 export const LoginScreen = ({ navigation }: any) => {
     const { login, isLoading } = useAuth();
-    const [email, setEmail] = useState('');
+    const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
 
     const handleLogin = async () => {
-        if (!email || !password) {
+        if (!identifier || !password) {
             Alert.alert('Error', 'Please fill in all fields');
             return;
         }
 
         try {
-            const response = await login(email, password);
+            const response = await login(identifier, password);
             if (!response.success) {
                 Alert.alert('Login Failed', response.message);
             }
@@ -40,12 +40,11 @@ export const LoginScreen = ({ navigation }: any) => {
                 <View style={styles.formContainer}>
                     <TextInput
                         style={styles.input}
-                        placeholder="Email"
+                        placeholder="Username or Email"
                         placeholderTextColor="#999"
-                        value={email}
-                        onChangeText={setEmail}
+                        value={identifier}
+                        onChangeText={setIdentifier}
                         autoCapitalize="none"
-                        keyboardType="email-address"
                     />
 
                     <TextInput

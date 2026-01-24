@@ -13,32 +13,47 @@ const fixPhotoUrl = (url: string | null, req: Request) => {
 };
 
 export const register = async (req: Request, res: Response) => {
-    const { name, phone, email, password, role, car_model, car_color, plate_number } = req.body;
+    const { username, name, phone, email, password, role, car_model, car_color, plate_number } = req.body;
+
+    if (!username || !name || !phone || !password || !role) {
+        return res.json({ success: false, message: 'Missing required fields' });
+    }
 
     try {
+        const usernameLower = username.toLowerCase().trim();
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Check if user already exists
-        const userQuery = await db.collection('users').where('email', '==', email).get();
-        if (!userQuery.empty) {
-            res.json({ success: false, message: 'User with this email already exists' });
-            return;
+        // 1. Check if username already exists
+        const usernameQuery = await db.collection('users').where('username_lower', '==', usernameLower).get();
+        if (!usernameQuery.empty) {
+            return res.json({ success: false, message: 'Username is already taken' });
+        }
+
+        // 2. Check if email already exists (only if provided)
+        if (email) {
+            const emailQuery = await db.collection('users').where('email', '==', email).get();
+            if (!emailQuery.empty) {
+                return res.json({ success: false, message: 'User with this email already exists' });
+            }
         }
 
         const newUserRef = db.collection('users').doc();
         const userId = newUserRef.id;
 
-        const userData = {
+        const userData: any = {
             id: userId,
+            username,
+            username_lower: usernameLower,
             name,
             phone,
-            email,
             password: hashedPassword,
             role,
             status: 'active',
             created_at: new Date().toISOString(),
             is_online: false
         };
+
+        if (email) userData.email = email;
 
         await newUserRef.set(userData);
 
@@ -62,25 +77,35 @@ export const register = async (req: Request, res: Response) => {
 };
 
 export const login = async (req: Request, res: Response) => {
-    const { email, password } = req.body;
-    console.log(`Login attempt for email: ${email}`);
+    const { identifier, password } = req.body;
+    console.log(`Login attempt for: ${identifier}`);
+
+    if (!identifier || !password) {
+        return res.json({ success: false, message: 'Username/Email and Password are required' });
+    }
 
     try {
-        const userQuery = await db.collection('users').where('email', '==', email).limit(1).get();
+        const idLower = identifier.toLowerCase().trim();
+
+        // Try searching by username_lower OR email
+        let userQuery = await db.collection('users').where('username_lower', '==', idLower).limit(1).get();
 
         if (userQuery.empty) {
-            console.log(`Login failed: User not found for ${email}`);
-            res.json({ success: false, message: 'Invalid email or password' });
+            // Fallback: check email
+            userQuery = await db.collection('users').where('email', '==', identifier).limit(1).get();
+        }
+
+        if (userQuery.empty) {
+            console.log(`Login failed: User not found for ${identifier}`);
+            res.json({ success: false, message: 'Invalid credentials or unauthorized access' });
             return;
         }
 
         const userDoc = userQuery.docs[0];
         const userData = userDoc.data();
-        // CRITICAL: Firestore .data() doesn't include the document ID
-        // We need to add it manually from userDoc.id
         const user: any = {
             ...userData,
-            id: userData.id || userDoc.id  // Use stored id field or document ID
+            id: userData.id || userDoc.id
         };
 
         if (user && (await bcrypt.compare(password, user.password))) {
@@ -111,7 +136,7 @@ export const login = async (req: Request, res: Response) => {
             }
 
             const token = jwt.sign(
-                { id: user.id, email: user.email, role: user.role },
+                { id: user.id, email: user.email || user.username, role: user.role },
                 process.env.JWT_SECRET || 'fallback_secret_key_change_in_prod',
                 { expiresIn: '24h' }
             );
@@ -149,8 +174,9 @@ export const login = async (req: Request, res: Response) => {
                 token,
                 user: {
                     id: user.id,
+                    username: user.username,
                     name: user.name,
-                    email: user.email,
+                    email: user.email || null,
                     phone: user.phone,
                     role: user.role,
                     profile_photo: fixPhotoUrl(user.profile_photo, req),
@@ -158,8 +184,8 @@ export const login = async (req: Request, res: Response) => {
                 },
             });
         } else {
-            console.log(`Login failed: Invalid credentials for ${email}`);
-            res.json({ success: false, message: 'Invalid email or password' });
+            console.log(`Login failed: Invalid credentials for ${identifier}`);
+            res.json({ success: false, message: 'Invalid credentials or unauthorized access' });
         }
     } catch (error: any) {
         console.error('Login Error:', error);
@@ -223,7 +249,7 @@ export const logout = async (req: Request, res: Response) => {
 
 export const applyDriver = async (req: Request, res: Response) => {
     const {
-        name, phone, email, password,
+        username, name, phone, email, password,
         national_id, drivers_license_number, license_expiry_date,
         vehicle_type, vehicle_registration_number, vehicle_color,
         driving_experience_years
@@ -232,10 +258,30 @@ export const applyDriver = async (req: Request, res: Response) => {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
     try {
+        if (!username || !name || !phone || !password) {
+            return res.json({ success: false, message: 'Missing required personal details' });
+        }
+
+        const usernameLower = username.toLowerCase().trim();
+
+        // 1. Check if username is already taken
+        const usernameQuery = await db.collection('users').where('username_lower', '==', usernameLower).get();
+        if (!usernameQuery.empty) {
+            return res.json({ success: false, message: 'Username is already taken' });
+        }
+
+        // 2. Check if email is already used (if provided)
+        if (email) {
+            const emailQuery = await db.collection('users').where('email', '==', email).get();
+            if (!emailQuery.empty) {
+                return res.json({ success: false, message: 'User with this email already exists' });
+            }
+        }
+
         const hashedPassword = await bcrypt.hash(password, 10);
         const host = req.get('host') || 'localhost:5000';
 
-        // 1. Create User (Pending)
+        // 3. Create User (Pending)
         const newUserRef = db.collection('users').doc();
         const userId = newUserRef.id;
 
@@ -243,19 +289,24 @@ export const applyDriver = async (req: Request, res: Response) => {
             ? `${req.protocol}://${host}/uploads/${files['profile_photo'][0].filename}`
             : '';
 
-        await newUserRef.set({
+        const userData: any = {
             id: userId,
+            username,
+            username_lower: usernameLower,
             name,
             phone,
-            email,
             password: hashedPassword,
             role: 'driver',
             status: 'pending',
             profile_photo: profilePhoto,
             created_at: new Date().toISOString()
-        });
+        };
 
-        // 2. Map File Paths
+        if (email) userData.email = email;
+
+        await newUserRef.set(userData);
+
+        // 4. Map File Paths
         const getFileUrl = (fieldname: string) => {
             if (files && files[fieldname]) {
                 return `${req.protocol}://${host}/uploads/${files[fieldname][0].filename}`;
@@ -268,16 +319,17 @@ export const applyDriver = async (req: Request, res: Response) => {
         const nrcFront = getFileUrl('nrc_front');
         const nrcBack = getFileUrl('nrc_back');
 
-        // 3. Create Application
+        // 5. Create Application
         const appRef = db.collection('driver_applications').doc();
         const applicationId = appRef.id;
 
         await appRef.set({
             id: applicationId,
             user_id: userId,
+            username,
             full_name: name,
             phone,
-            email,
+            email: email || null,
             national_id,
             drivers_license_number,
             license_expiry_date,

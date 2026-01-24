@@ -9,6 +9,7 @@ import api from '../../services/api';
 export const RegisterScreen = ({ navigation }: any) => {
     const { register, isLoading } = useAuth();
     const [name, setName] = useState('');
+    const [username, setUsername] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [password, setPassword] = useState('');
@@ -117,7 +118,7 @@ export const RegisterScreen = ({ navigation }: any) => {
 
         setUploading(true);
         try {
-            const response: any = await register(name, phone, email, password, role, carModel, carColor, plateNumber);
+            const response: any = await register(username, name, phone, email || null, password, role, carModel, carColor, plateNumber);
             console.log('   Registration response:', response);
 
             if (response.success) {
@@ -192,7 +193,16 @@ export const RegisterScreen = ({ navigation }: any) => {
 
                     <TextInput
                         style={styles.input}
-                        placeholder="Email"
+                        placeholder="Username (Unique)"
+                        placeholderTextColor="#999"
+                        value={username}
+                        onChangeText={setUsername}
+                        autoCapitalize="none"
+                    />
+
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Email (Optional)"
                         placeholderTextColor="#999"
                         value={email}
                         onChangeText={setEmail}

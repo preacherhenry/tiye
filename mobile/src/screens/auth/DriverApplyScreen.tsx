@@ -41,7 +41,7 @@ const DriverApplyScreen = ({ navigation }: any) => {
 
     // Form Data
     const [formData, setFormData] = useState({
-        name: '', phone: '', email: '', password: '',
+        name: '', username: '', phone: '', email: '', password: '',
         national_id: '', drivers_license_number: '', license_expiry_date: '',
         vehicle_type: '', vehicle_registration_number: '', vehicle_color: '',
         driving_experience_years: ''
@@ -77,7 +77,7 @@ const DriverApplyScreen = ({ navigation }: any) => {
 
     const validateStep = () => {
         if (step === 1) {
-            if (!formData.name || !formData.phone || !formData.email || !formData.password) {
+            if (!formData.name || !formData.username || !formData.phone || !formData.password) {
                 Alert.alert("Error", "Please fill in all personal details.");
                 return false;
             }
@@ -177,7 +177,8 @@ const DriverApplyScreen = ({ navigation }: any) => {
                     <View style={styles.stepContainer}>
                         <Text style={styles.stepTitle}>Personal Information</Text>
                         <InputField label="Full Name" value={formData.name} onChange={(v: string) => updateField('name', v)} placeholder="Enter your full name" />
-                        <InputField label="Email Address" value={formData.email} onChange={(v: string) => updateField('email', v)} placeholder="email@example.com" keyboard="email-address" />
+                        <InputField label="Username (Unique)" value={formData.username} onChange={(v: string) => updateField('username', v)} placeholder="e.g. pilot_123" />
+                        <InputField label="Email Address (Optional)" value={formData.email} onChange={(v: string) => updateField('email', v)} placeholder="email@example.com" keyboard="email-address" />
                         <InputField label="Phone Number" value={formData.phone} onChange={(v: string) => updateField('phone', v)} placeholder="+260 9xx xxxxxx" keyboard="phone-pad" />
                         <InputField label="Create Password" value={formData.password} onChange={(v: string) => updateField('password', v)} placeholder="At least 6 characters" secure />
                     </View>

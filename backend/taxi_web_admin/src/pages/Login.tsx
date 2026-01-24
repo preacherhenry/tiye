@@ -5,7 +5,7 @@ import { LogIn, Loader2 } from 'lucide-react';
 import logo from '../assets/tiye_logo.png';
 
 const Login: React.FC = () => {
-    const [email, setEmail] = useState('');
+    const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -17,7 +17,7 @@ const Login: React.FC = () => {
         setError('');
         setSubmitting(true);
 
-        const success = await login(email, password);
+        const success = await login(identifier, password);
         if (success) {
             navigate('/');
         } else {
@@ -48,14 +48,14 @@ const Login: React.FC = () => {
 
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-400 mb-1">Email Address</label>
+                            <label className="block text-sm font-medium text-gray-400 mb-1">Username or Email</label>
                             <input
-                                type="email"
+                                type="text"
                                 required
                                 className="w-full bg-surface border border-white/10 rounded-xl px-4 py-3 text-text focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                placeholder="admin@tiye.com"
+                                value={identifier}
+                                onChange={(e) => setIdentifier(e.target.value)}
+                                placeholder="Username or email"
                             />
                         </div>
 

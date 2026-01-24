@@ -3,9 +3,10 @@ import * as SecureStore from 'expo-secure-store';
 import api, { setUnauthorizedHandler } from '../services/api';
 
 interface User {
-    id: number;
+    id: string;
+    username: string;
     name: string;
-    email: string;
+    email: string | null;
     phone: string;
     role: 'passenger' | 'driver';
     profile_photo?: string;
@@ -20,8 +21,8 @@ interface AuthContextType {
     user: User | null;
     token: string | null;
     isLoading: boolean;
-    login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
-    register: (name: string, phone: string, email: string, password: string, role: string, carModel?: string, carColor?: string, plateNumber?: string) => Promise<{ success: boolean; message?: string }>;
+    login: (identifier: string, password: string) => Promise<{ success: boolean; message?: string }>;
+    register: (username: string, name: string, phone: string, email: string | null, password: string, role: string, carModel?: string, carColor?: string, plateNumber?: string) => Promise<{ success: boolean; message?: string }>;
     logout: () => Promise<void>;
     refreshUser: () => Promise<void>;
 }
@@ -54,9 +55,9 @@ export const AuthProvider = ({ children }: any) => {
         }
     };
 
-    const login = async (email: string, password: string) => {
+    const login = async (identifier: string, password: string) => {
         try {
-            const response = await api.post('/login', { email, password });
+            const response = await api.post('/login', { identifier, password });
             if (response.data.success) {
                 const { token, user } = response.data;
                 console.log('🔐 Login successful!');
@@ -76,9 +77,10 @@ export const AuthProvider = ({ children }: any) => {
         }
     };
 
-    const register = async (name: string, phone: string, email: string, password: string, role: string, carModel?: string, carColor?: string, plateNumber?: string) => {
+    const register = async (username: string, name: string, phone: string, email: string | null, password: string, role: string, carModel?: string, carColor?: string, plateNumber?: string) => {
         try {
             const response = await api.post('/register', {
+                username,
                 name,
                 phone,
                 email,
@@ -131,11 +133,10 @@ export const AuthProvider = ({ children }: any) => {
         let interval: any;
         if (token && user) {
             interval = setInterval(() => {
-                api.get('/profile').catch((err) => {
-                    // Interceptor handles 401/403, so we just catch to avoid unhandled promise rejection
-                    console.log('💓 Heartbeat status check:', err.response?.status || 'network error');
+                refreshUser().catch((err) => {
+                    console.log('💓 Heartbeat refresh failed:', err.message);
                 });
-            }, 10000); // 10 seconds for "immediate" logout
+            }, 5000); // 5 seconds for "immediate" status updates
         }
         return () => clearInterval(interval);
     }, [token, !!user]);

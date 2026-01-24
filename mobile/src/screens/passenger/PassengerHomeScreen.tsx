@@ -1036,20 +1036,20 @@ const styles = StyleSheet.create({
 
     // Autocomplete Styles
     autocompleteDropdown: {
-        backgroundColor: 'white',
         maxHeight: 200,
-        borderRadius: 10,
-        marginTop: -10,
+        borderRadius: 12,
+        marginTop: 5,
         marginBottom: 10,
-        elevation: 5,
+        backgroundColor: '#1E1E1E', // Dark background for contrast
+        elevation: 8,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
         borderWidth: 1,
-        borderColor: '#eee',
+        borderColor: '#333', // Darker border
         position: 'absolute',
-        top: 55, // Based on input height
+        top: 60, // Based on input height
         left: 0,
         right: 0,
         zIndex: 1000
@@ -1057,9 +1057,9 @@ const styles = StyleSheet.create({
     autocompleteItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 12,
+        padding: 15,
         borderBottomWidth: 1,
-        borderBottomColor: '#f9f9f9',
+        borderBottomColor: '#2A2A2A', // Dark divider
     },
     placeName: {
         fontSize: 14,
