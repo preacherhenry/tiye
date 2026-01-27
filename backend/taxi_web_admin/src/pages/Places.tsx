@@ -6,6 +6,10 @@ interface Place {
     id: string;
     name: string;
     description?: string;
+    latitude?: number;
+    longitude?: number;
+    category?: string;
+    area?: string;
     created_at: string;
 }
 
@@ -26,7 +30,11 @@ const Places: React.FC = () => {
 
     const [formData, setFormData] = useState({
         name: '',
-        description: ''
+        description: '',
+        latitude: '',
+        longitude: '',
+        category: 'landmark',
+        area: ''
     });
 
     useEffect(() => {
@@ -117,7 +125,11 @@ const Places: React.FC = () => {
         setEditingPlace(place);
         setFormData({
             name: place.name,
-            description: place.description || ''
+            description: place.description || '',
+            latitude: place.latitude?.toString() || '',
+            longitude: place.longitude?.toString() || '',
+            category: place.category || 'landmark',
+            area: place.area || ''
         });
         setShowModal(true);
     };
@@ -127,7 +139,11 @@ const Places: React.FC = () => {
         setEditingPlace(null);
         setFormData({
             name: '',
-            description: ''
+            description: '',
+            latitude: '',
+            longitude: '',
+            category: 'landmark',
+            area: ''
         });
     };
 
@@ -304,6 +320,65 @@ const Places: React.FC = () => {
                                         onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                         placeholder="e.g. Major Junction, Night Club, School, etc."
                                     />
+                                </div>
+                                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                                    <h3 className="text-sm font-bold text-gray-400 mb-4 flex items-center gap-2">
+                                        <MapIcon className="w-4 h-4" />
+                                        Coordinate Details (Optional)
+                                    </h3>
+                                    <div className="grid grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label className="block text-xs text-gray-500 mb-1.5 ml-1">Latitude</label>
+                                            <input
+                                                type="number"
+                                                step="0.000001"
+                                                className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-primary/50 outline-none"
+                                                value={formData.latitude}
+                                                onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
+                                                placeholder="-16.0375"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs text-gray-500 mb-1.5 ml-1">Longitude</label>
+                                            <input
+                                                type="number"
+                                                step="0.000001"
+                                                className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-primary/50 outline-none"
+                                                value={formData.longitude}
+                                                onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
+                                                placeholder="28.8530"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs text-gray-500 mb-1.5 ml-1">Category</label>
+                                            <select
+                                                className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-primary/50 outline-none"
+                                                value={formData.category}
+                                                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                            >
+                                                <option value="landmark">Landmark</option>
+                                                <option value="shop">Shop / Business</option>
+                                                <option value="lodge">Lodge / Hotel</option>
+                                                <option value="government">Government</option>
+                                                <option value="school">School</option>
+                                                <option value="church">Church</option>
+                                                <option value="hospital">Hospital</option>
+                                                <option value="junction">Major Junction</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs text-gray-500 mb-1.5 ml-1">Area / Suburb</label>
+                                            <input
+                                                type="text"
+                                                className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2.5 text-sm focus:ring-1 focus:ring-primary/50 outline-none"
+                                                value={formData.area}
+                                                onChange={(e) => setFormData({ ...formData, area: e.target.value })}
+                                                placeholder="e.g. Chirundu North"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div className="flex gap-4 pt-6">

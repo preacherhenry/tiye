@@ -102,16 +102,21 @@ export const getAllPlaces = async (req: Request, res: Response) => {
 
 export const addPlace = async (req: Request, res: Response) => {
     try {
-        const { name, description } = req.body;
+        const { name, description, latitude, longitude, category, area } = req.body;
         if (!name) {
             return res.status(400).json({ success: false, message: 'Place name is required' });
         }
 
-        const placeData = {
+        const placeData: any = {
             name: name.trim(),
             description: description?.trim() || '',
             created_at: new Date().toISOString()
         };
+
+        if (latitude) placeData.latitude = parseFloat(latitude);
+        if (longitude) placeData.longitude = parseFloat(longitude);
+        if (category) placeData.category = category;
+        if (area) placeData.area = area;
 
         const docRef = await db.collection('places').add(placeData);
         res.json({ success: true, id: docRef.id, message: 'Place added successfully' });
@@ -123,11 +128,15 @@ export const addPlace = async (req: Request, res: Response) => {
 export const updatePlace = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const { name, description } = req.body;
+        const { name, description, latitude, longitude, category, area } = req.body;
 
         const updates: any = {};
         if (name !== undefined) updates.name = name.trim();
         if (description !== undefined) updates.description = description.trim();
+        if (latitude !== undefined) updates.latitude = parseFloat(latitude);
+        if (longitude !== undefined) updates.longitude = parseFloat(longitude);
+        if (category !== undefined) updates.category = category;
+        if (area !== undefined) updates.area = area;
 
         await db.collection('places').doc(id).update(updates);
         res.json({ success: true, message: 'Place updated successfully' });
