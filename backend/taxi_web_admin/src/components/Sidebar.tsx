@@ -21,7 +21,6 @@ const Sidebar: React.FC = () => {
     const { logout, user } = useAuth();
 
     const navItems = [
-        { icon: MapPin, label: 'Places', path: '/places' },
         { icon: LayoutDashboard, label: 'Overview', path: '/' },
         { icon: FileCheck, label: 'Applications', path: '/applications' },
         { icon: XCircle, label: 'Rejected', path: '/rejected' },
@@ -31,6 +30,7 @@ const Sidebar: React.FC = () => {
         { icon: Tag, label: 'Promotions', path: '/promotions' },
         { icon: CreditCard, label: 'Subscriptions', path: '/subscriptions' },
         { icon: Map, label: 'Fares', path: '/fares' },
+        { icon: MapPin, label: 'Places', path: '/places' },
     ];
 
     if (user?.role === 'super_admin') {

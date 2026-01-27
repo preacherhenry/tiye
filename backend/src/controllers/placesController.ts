@@ -102,17 +102,14 @@ export const getAllPlaces = async (req: Request, res: Response) => {
 
 export const addPlace = async (req: Request, res: Response) => {
     try {
-        const { name, latitude, longitude, category, area } = req.body;
-        if (!name || !latitude || !longitude) {
-            return res.status(400).json({ success: false, message: 'Missing required fields' });
+        const { name, description } = req.body;
+        if (!name) {
+            return res.status(400).json({ success: false, message: 'Place name is required' });
         }
 
         const placeData = {
-            name,
-            latitude: parseFloat(latitude),
-            longitude: parseFloat(longitude),
-            category: category || 'landmark',
-            area: area || '',
+            name: name.trim(),
+            description: description?.trim() || '',
             created_at: new Date().toISOString()
         };
 
@@ -126,10 +123,11 @@ export const addPlace = async (req: Request, res: Response) => {
 export const updatePlace = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const updates = req.body;
+        const { name, description } = req.body;
 
-        if (updates.latitude) updates.latitude = parseFloat(updates.latitude);
-        if (updates.longitude) updates.longitude = parseFloat(updates.longitude);
+        const updates: any = {};
+        if (name !== undefined) updates.name = name.trim();
+        if (description !== undefined) updates.description = description.trim();
 
         await db.collection('places').doc(id).update(updates);
         res.json({ success: true, message: 'Place updated successfully' });

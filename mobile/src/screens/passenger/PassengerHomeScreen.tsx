@@ -452,19 +452,41 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
         }
         setIsLoadingLoc(true);
         const freshSettings = await fetchSettings();
-        await calculateRoute(pickup, destination, freshSettings);
+        await calculateRoute(pickup, destination, pickupCoords, destCoords, freshSettings);
         setIsLoadingLoc(false);
     };
 
-    const calculateRoute = async (pText: string, dText: string, currentSettings?: any) => {
+    const calculateRoute = async (pText: string, dText: string, pC: any, dC: any, currentSettings?: any) => {
         const s = currentSettings || settings;
         try {
-            const pRes = await Location.geocodeAsync(pText + ", Chirundu, Zambia");
-            const dRes = await Location.geocodeAsync(dText + ", Chirundu, Zambia");
+            // Local lookup helper
+            const findLocalCoords = (name: string) => {
+                const all = [...CHIRUNDU_PLACES, ...dynamicPlaces];
+                const match = all.find(p => p.name.toLowerCase() === name.toLowerCase());
+                return (match?.latitude && match?.longitude) ? { latitude: match.latitude, longitude: match.longitude } : null;
+            };
 
-            if (pRes.length > 0 && dRes.length > 0) {
-                const p = pRes[0];
-                const d = dRes[0];
+            // 1. Top Priority: Exact coords from autocomplete selection (if user tapped a suggestion)
+            let p = pC;
+            let d = dC;
+
+            // 2. Next Priority: Google Maps / Expo Geocoder (if no selection or to try formal address)
+            if (!p) {
+                const pRes = await Location.geocodeAsync(pText + ", Chirundu, Zambia");
+                if (pRes.length > 0) p = pRes[0];
+            }
+
+            if (!d) {
+                const dRes = await Location.geocodeAsync(dText + ", Chirundu, Zambia");
+                if (dRes.length > 0) d = dRes[0];
+            }
+
+            // 3. Final Fallback: Local Landmark Database (Internal + Dynamic Admin Places)
+            // (Only runs if Google failed to resolve the name)
+            if (!p) p = findLocalCoords(pText);
+            if (!d) d = findLocalCoords(dText);
+
+            if (p && d) {
 
                 const url = `http://router.project-osrm.org/route/v1/driving/${p.longitude},${p.latitude};${d.longitude},${d.latitude}?overview=full&geometries=geojson`;
                 const osrm = await fetch(url).then(r => r.json());
@@ -729,9 +751,9 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                             {activeInput === 'pickup' && (
                                 <ScrollView
                                     style={styles.autocompleteDropdown}
+                                    contentContainerStyle={{ flexGrow: 1 }}
                                     keyboardShouldPersistTaps="handled"
                                     showsVerticalScrollIndicator={true}
-                                    nestedScrollEnabled={true}
                                 >
                                     {filteredPlaces.length > 0 ? (
                                         filteredPlaces.map((place, idx) => (
@@ -778,9 +800,9 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                             {activeInput === 'destination' && (
                                 <ScrollView
                                     style={styles.autocompleteDropdown}
+                                    contentContainerStyle={{ flexGrow: 1 }}
                                     keyboardShouldPersistTaps="handled"
                                     showsVerticalScrollIndicator={true}
-                                    nestedScrollEnabled={true}
                                 >
                                     {filteredPlaces.length > 0 ? (
                                         filteredPlaces.map((place, idx) => (
@@ -1012,7 +1034,15 @@ const styles = StyleSheet.create({
         marginHorizontal: 20, marginBottom: 10
     },
     greeting: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, color: Colors.primary },
-    input: { backgroundColor: Colors.background, padding: 15, borderRadius: 10, marginBottom: 10, color: Colors.text },
+    input: {
+        backgroundColor: Colors.background,
+        padding: 15,
+        borderRadius: 10,
+        marginBottom: 5,
+        color: Colors.text,
+        borderWidth: 1,
+        borderColor: '#333'
+    },
     previewBox: {
         backgroundColor: Colors.surface, padding: 20, borderRadius: 15, elevation: 10, alignItems: 'center',
         marginHorizontal: 20, marginBottom: 10
@@ -1079,23 +1109,18 @@ const styles = StyleSheet.create({
 
     // Autocomplete Styles
     autocompleteDropdown: {
-        maxHeight: 160,
+        maxHeight: 200,
         borderRadius: 12,
         marginTop: 5,
-        marginBottom: 10,
-        backgroundColor: '#1E1E1E', // Dark background for contrast
+        backgroundColor: '#1E1E1E',
         elevation: 8,
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 5,
         borderWidth: 1,
-        borderColor: '#333', // Darker border
-        position: 'absolute',
-        top: 60, // Based on input height
-        left: 0,
-        right: 0,
-        zIndex: 1000
+        borderColor: '#333',
+        width: '100%',
     },
     autocompleteItem: {
         flexDirection: 'row',
