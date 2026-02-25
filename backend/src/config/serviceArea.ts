@@ -16,8 +16,14 @@ export const SERVICE_ZONES: ServiceZone[] = [
     },
     {
         name: "Siavonga Junction",
-        lat: -16.05435,
-        lng: 28.83000,
+        lat: -16.0353,
+        lng: 28.7848,
+        radiusKm: 10
+    },
+    {
+        name: "Katwezere (JW Congregation)",
+        lat: -16.0232,
+        lng: 28.8156,
         radiusKm: 5
     },
     {
@@ -42,7 +48,7 @@ export const SERVICE_ZONES: ServiceZone[] = [
         name: "Turnpike Junction",
         lat: -15.795,
         lng: 28.188,
-        radiusKm: 10 // Larger radius for a junction area
+        radiusKm: 10
     }
 ];
 
@@ -63,7 +69,7 @@ export const isLocationInServiceArea = async (lat: number, lng: number): Promise
             };
         });
 
-        let zonesToCheck = zones.length > 0 ? zones : SERVICE_ZONES;
+        const zonesToCheck = [...SERVICE_ZONES, ...zones];
 
         for (const zone of zonesToCheck) {
             const dLat = deg2rad(lat - zone.lat);
