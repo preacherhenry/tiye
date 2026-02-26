@@ -22,7 +22,7 @@ interface Admin {
     name: string;
     email: string;
     phone: string;
-    role: 'admin' | 'super_admin';
+    role: string;
     is_online: boolean;
     status: 'active' | 'suspended';
     profile_photo?: string;
@@ -74,13 +74,12 @@ const AdminPanel: React.FC = () => {
         }
     };
 
-    const handleUpdateRole = async (id: string, currentRole: string) => {
-        const newRole = currentRole === 'admin' ? 'super_admin' : 'admin';
+    const handleUpdateRole = async (id: string, newRole: string) => {
         try {
             await api.post(`/admin/admins/${id}/role`, { role: newRole });
             fetchAdmins();
-        } catch (error) {
-            console.error('Failed to update role:', error);
+        } catch (error: any) {
+            alert(error.response?.data?.message || 'Failed to update role');
         }
     };
 
@@ -177,20 +176,13 @@ const AdminPanel: React.FC = () => {
 
                                     <td className="py-6">
                                         <div className="flex items-center space-x-2">
-                                            <button
-                                                onClick={() => handleUpdateRole(admin.id, admin.role)}
-                                                disabled={user?.role !== 'super_admin' || user?.id === admin.id}
-                                                className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest inline-flex items-center transition-all ${admin.role === 'super_admin'
-                                                    ? 'text-primary bg-primary/10 hover:bg-primary/20'
-                                                    : 'text-secondary bg-secondary/10 hover:bg-secondary/20'
-                                                    } ${(user?.role !== 'super_admin' || user?.id === admin.id) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                            >
-                                                {admin.role === 'super_admin' ? (
-                                                    <><Shield className="w-3 h-3 mr-1" /> Super Admin</>
-                                                ) : (
-                                                    <><ShieldAlert className="w-3 h-3 mr-1" /> Admin</>
-                                                )}
-                                            </button>
+                                            <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest inline-flex items-center transition-all ${admin.role === 'super_admin'
+                                                ? 'text-primary bg-primary/10'
+                                                : 'text-secondary bg-secondary/10'
+                                                }`}>
+                                                {admin.role === 'super_admin' && <Shield className="w-3 h-3 mr-1" />}
+                                                {admin.role.replace(/_/g, ' ')}
+                                            </span>
                                         </div>
                                     </td>
                                     <td className="py-6">
@@ -332,10 +324,16 @@ const AdminPanel: React.FC = () => {
                                     <select
                                         value={formData.role}
                                         onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-primary transition-all"
+                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-primary transition-all appearance-none cursor-pointer"
                                     >
-                                        <option value="admin">Admin</option>
-                                        <option value="super_admin">Super Admin</option>
+                                        <option value="super_admin" className="bg-surface text-text">Super Admin (Henry)</option>
+                                        <option value="director_ceo" className="bg-surface text-text">Director & CEO</option>
+                                        <option value="finance_manager" className="bg-surface text-text">Finance Manager</option>
+                                        <option value="accounts_assistant" className="bg-surface text-text">Accounts Assistant</option>
+                                        <option value="driver_relations_manager" className="bg-surface text-text">Driver Relations Manager</option>
+                                        <option value="operations_supervisor" className="bg-surface text-text">Operations Supervisor</option>
+                                        <option value="it_manager" className="bg-surface text-text">IT Manager</option>
+                                        <option value="system_admin_developer" className="bg-surface text-text">System Admin / Developer</option>
                                     </select>
                                 </div>
 

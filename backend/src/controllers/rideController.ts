@@ -47,8 +47,11 @@ export const getRideDetails = async (req: Request, res: Response) => {
         const userId = (req as any).user.id;
         const userRole = (req as any).user.role;
 
-        // Security Check: Only allow Passenger or Driver involved in the ride (or Admin)
-        if (ride.passenger_id !== userId && ride.driver_id !== userId && userRole !== 'admin') {
+        const { hasPermission } = require('../config/roles');
+
+        // Security Check: Only allow Passenger or Driver involved in the ride (or authorized staff)
+        const canMonitor = hasPermission(userRole, 'ride:monitor');
+        if (ride.passenger_id !== userId && ride.driver_id !== userId && !canMonitor) {
             res.status(403).json({ success: false, message: 'Unauthorized access to this ride' });
             return;
         }
@@ -67,11 +70,14 @@ export const requestRide = async (req: Request, res: Response) => {
     const {
         passenger_id, pickup, destination, fare, distance,
         pickup_lat, pickup_lng, dropoff_lat, dropoff_lng,
-        promoId
+        promoId, is_manual_destination
     } = req.body;
+
+    const isManual = Boolean(is_manual_destination);
 
     console.log('📬 New Ride Request Received:');
     console.log('   Passenger ID:', passenger_id);
+    console.log('   Manual Destination:', isManual);
 
     if (!passenger_id || !pickup || !destination) {
         console.log('❌ Request missing required fields');
@@ -79,7 +85,7 @@ export const requestRide = async (req: Request, res: Response) => {
         return;
     }
 
-    // Validate Service Area
+    // Validate Service Area — pickup always checked (GPS-provided)
     if (pickup_lat && pickup_lng) {
         const inServiceArea = await isLocationInServiceArea(Number(pickup_lat), Number(pickup_lng));
         if (!inServiceArea) {
@@ -89,7 +95,8 @@ export const requestRide = async (req: Request, res: Response) => {
         }
     }
 
-    if (dropoff_lat && dropoff_lng) {
+    // Skip destination service-area check for manual/custom destinations (no coords available)
+    if (!isManual && dropoff_lat && dropoff_lng) {
         const inServiceArea = await isLocationInServiceArea(Number(dropoff_lat), Number(dropoff_lng));
         if (!inServiceArea) {
             console.log(`❌ Destination outside service area: ${dropoff_lat}, ${dropoff_lng}`);
@@ -103,7 +110,7 @@ export const requestRide = async (req: Request, res: Response) => {
         const rideRef = db.collection('rides').doc();
         const rideId = rideRef.id;
 
-        const rideData = {
+        const rideData: Record<string, any> = {
             id: rideId,
             passenger_id,
             pickup_location: pickup,
@@ -114,14 +121,15 @@ export const requestRide = async (req: Request, res: Response) => {
             pickup_lng: pickup_lng || 0,
             dest_lat: dropoff_lat || 0,
             dest_lng: dropoff_lng || 0,
+            is_manual_destination: isManual,
             status: 'pending',
             created_at: new Date().toISOString()
         };
 
         batch.set(rideRef, rideData);
 
-        // 2. If promo used, record usage
-        if (promoId) {
+        // If promo used, record usage (promos are not applicable to manual trips, but guard anyway)
+        if (promoId && !isManual) {
             const usageRef = db.collection('promotion_usage').doc();
             batch.set(usageRef, {
                 promotion_id: promoId,
@@ -226,7 +234,7 @@ export const acceptRide = async (req: Request, res: Response) => {
 };
 
 export const updateRideStatus = async (req: Request, res: Response) => {
-    const { ride_id, status } = req.body;
+    const { ride_id, status, distance } = req.body;
 
     const validStatuses = ['arrived', 'in_progress', 'completed', 'cancelled'];
 
@@ -251,10 +259,34 @@ export const updateRideStatus = async (req: Request, res: Response) => {
 
             const ride = rideDoc.data()!;
 
-            transaction.update(rideRef, {
-                status,
-                updated_at: new Date().toISOString()
-            });
+            // If manual trip is completed, calculate final fare based on actual distance
+            if (status === 'completed' && ride.is_manual_destination) {
+                console.log(`📏 Calculating fare for manual trip ${ride_id}. Reported distance: ${distance}km`);
+
+                const settingsRef = db.collection('settings');
+                const baseFareDoc = await settingsRef.doc('base_fare').get();
+                const rateDoc = await settingsRef.doc('price_per_km').get();
+
+                const baseFare = Number(baseFareDoc.data()?.value || 20);
+                const rate = Number(rateDoc.data()?.value || 10);
+
+                const actualDistance = Number(distance) || 0;
+                const finalFare = Math.round(baseFare + (actualDistance * rate));
+
+                console.log(`💰 Manual Fare Result: Base(${baseFare}) + Distance(${actualDistance}km * ${rate}) = K${finalFare}`);
+
+                transaction.update(rideRef, {
+                    status,
+                    fare: finalFare,
+                    distance: Number(actualDistance.toFixed(2)),
+                    updated_at: new Date().toISOString()
+                });
+            } else {
+                transaction.update(rideRef, {
+                    status,
+                    updated_at: new Date().toISOString()
+                });
+            }
 
             // If trip ended, set driver back to online
             if ((status === 'completed' || status === 'cancelled') && ride.driver_id) {

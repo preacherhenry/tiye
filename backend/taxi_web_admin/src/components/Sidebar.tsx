@@ -1,4 +1,4 @@
-import React from 'react'; // icon fix v2
+import React, { useState, useEffect } from 'react'; // icon fix v2
 import { NavLink } from 'react-router-dom';
 import {
     BarChart3,
@@ -13,27 +13,62 @@ import {
     Tag,
     CreditCard,
     Map,
-    MapPin
+    MapPin,
+    MessageSquare
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
+
+import { hasPermission } from '../utils/rbac';
 
 const Sidebar: React.FC = () => {
     const { logout, user } = useAuth();
+    const [unreadCount, setUnreadCount] = useState(0);
 
     const navItems = [
         { icon: LayoutDashboard, label: 'Overview', path: '/' },
-        { icon: FileCheck, label: 'Applications', path: '/applications' },
-        { icon: XCircle, label: 'Rejected', path: '/rejected' },
-        { icon: Users, label: 'Drivers', path: '/drivers' },
-        { icon: User, label: 'Passengers', path: '/passengers' },
-        { icon: BarChart3, label: 'Analytics', path: '/analytics' },
-        { icon: Tag, label: 'Promotions', path: '/promotions' },
-        { icon: CreditCard, label: 'Subscriptions', path: '/subscriptions' },
-        { icon: Map, label: 'Fares', path: '/fares' },
-        { icon: MapPin, label: 'Places', path: '/places' },
+        { icon: MessageSquare, label: 'Messages', path: '/messages', badge: unreadCount },
     ];
 
-    if (user?.role === 'super_admin') {
+    useEffect(() => {
+        if (!user) return;
+        
+        const fetchUnread = async () => {
+            try {
+                const res = await api.get('/messages/unread-count');
+                if (res.data.success) setUnreadCount(res.data.count);
+            } catch (error) {
+                console.error('Failed to fetch unread count:', error);
+            }
+        };
+
+        fetchUnread();
+        const interval = setInterval(fetchUnread, 30000); // Poll every 30s
+        return () => clearInterval(interval);
+    }, [user]);
+
+    if (hasPermission(user?.role, 'driver:manage')) {
+        navItems.push({ icon: Users, label: 'Drivers', path: '/drivers' });
+        navItems.push({ icon: FileCheck, label: 'Applications', path: '/applications' });
+        navItems.push({ icon: XCircle, label: 'Rejected', path: '/rejected' });
+    }
+
+    if (hasPermission(user?.role, 'ride:monitor')) {
+        navItems.push({ icon: User, label: 'Passengers', path: '/passengers' });
+    }
+
+    if (hasPermission(user?.role, 'finance:dashboard')) {
+        navItems.push({ icon: BarChart3, label: 'Analytics', path: '/analytics' });
+        navItems.push({ icon: CreditCard, label: 'Subscriptions', path: '/subscriptions' });
+    }
+
+    if (hasPermission(user?.role, 'report:view_all')) {
+        navItems.push({ icon: Map, label: 'Fares', path: '/fares' });
+        navItems.push({ icon: Tag, label: 'Promotions', path: '/promotions' });
+        navItems.push({ icon: MapPin, label: 'Places', path: '/places' });
+    }
+
+    if (hasPermission(user?.role, 'user:manage')) {
         navItems.push({ icon: ShieldCheck, label: 'Admin Panel', path: '/admin' });
     }
 
@@ -60,8 +95,24 @@ const Sidebar: React.FC = () => {
                                 : 'text-gray-400 hover:bg-white/5 hover:text-text'}
             `}
                     >
-                        <item.icon className="w-5 h-5" />
-                        <span>{item.label}</span>
+                        {({ isActive }) => (
+                            <>
+                                <div className="relative">
+                                    <item.icon className="w-5 h-5" />
+                                    {(item as any).badge > 0 && (
+                                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-surface"></span>
+                                    )}
+                                </div>
+                                <span className="flex-1">{item.label}</span>
+                                {(item as any).badge > 0 && (
+                                    <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${
+                                        isActive ? 'bg-black/20 text-black' : 'bg-primary/20 text-primary'
+                                    }`}>
+                                        {(item as any).badge}
+                                    </span>
+                                )}
+                            </>
+                        )}
                     </NavLink>
                 ))}
             </nav>

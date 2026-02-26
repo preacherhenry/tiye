@@ -52,15 +52,17 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     }
 };
 
+import { hasPermission } from '../config/roles';
+
 export const isAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (req.user?.role !== 'admin' && req.user?.role !== 'super_admin') {
+    if (!hasPermission(req.user?.role, 'admin:dashboard')) {
         return res.status(403).json({ success: false, message: 'Access denied. Admin privileges required.' });
     }
     next();
 };
 
 export const requireSuperAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (req.user?.role !== 'super_admin') {
+    if (!hasPermission(req.user?.role, 'user:manage')) {
         return res.status(403).json({ success: false, message: 'Access denied. Super admin privileges required.' });
     }
     next();

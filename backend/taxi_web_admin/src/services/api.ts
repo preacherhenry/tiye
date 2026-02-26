@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-    baseURL: 'https://tiye-backend.onrender.com', // Updated to live backend URL
+    baseURL: 'http://127.0.0.1:5000', // Backend API port (explicit IP)
 });
 
 api.interceptors.request.use((config) => {

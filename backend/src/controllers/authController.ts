@@ -93,39 +93,44 @@ export const login = async (req: Request, res: Response) => {
         let userQuery = await db.collection('users').where('username_lower', '==', idLower).limit(1).get();
 
         if (userQuery.empty) {
-            // Fallback: check email
+            // Fallback: check email (case-insensitive)
+            userQuery = await db.collection('users').where('email', '==', idLower).limit(1).get();
+        }
+
+        if (userQuery.empty) {
+            // Last fallback: raw email from input (for legacy)
             userQuery = await db.collection('users').where('email', '==', loginIdentifier).limit(1).get();
         }
 
         if (userQuery.empty) {
-            console.log(`Login failed: User not found for ${identifier}`);
-            res.json({ success: false, message: 'Invalid credentials or unauthorized access' });
-            return;
+            console.log(`❌ Login failed: User not found for ${loginIdentifier}`);
+            return res.json({ success: false, message: 'Invalid credentials or unauthorized access' });
         }
 
         const userDoc = userQuery.docs[0];
         const userData = userDoc.data();
+        console.log(`🔍 User found: ${userData.email} (Role: ${userData.role})`);
         const user: any = {
             ...userData,
             id: userData.id || userDoc.id
         };
 
-        if (user && (await bcrypt.compare(password, user.password))) {
+        const isPasswordMatch = await bcrypt.compare(password, user.password);
+        console.log(`🔑 Password match: ${isPasswordMatch}`);
+
+        if (user && isPasswordMatch) {
             // 1. Check for account suspension
             if (user.status === 'suspended') {
-                res.json({ success: false, status: 'suspended', message: 'ACCOUNT SUSPENDED. CONTACT OR VISIT SERVICE PROVIDERS FOR MORE INFORMATION' });
-                return;
+                return res.json({ success: false, status: 'suspended', message: 'ACCOUNT SUSPENDED. CONTACT OR VISIT SERVICE PROVIDERS FOR MORE INFORMATION' });
             }
 
             // 2. Check application status specifically for drivers
             if (user.role === 'driver') {
                 if (user.status === 'pending') {
-                    res.json({ success: false, status: 'pending', message: 'Your application has been submitted and is under review. You will be notified once approved.' });
-                    return;
+                    return res.json({ success: false, status: 'pending', message: 'Your application has been submitted and is under review. You will be notified once approved.' });
                 }
                 if (user.status === 'rejected') {
-                    res.json({ success: false, status: 'rejected', message: 'Your application was rejected. Please contact support for details.' });
-                    return;
+                    return res.json({ success: false, status: 'rejected', message: 'Your application was rejected. Please contact support for details.' });
                 }
             }
 
@@ -143,31 +148,28 @@ export const login = async (req: Request, res: Response) => {
                 { expiresIn: '24h' }
             );
 
-            // Update online status
+            // Update online status for everyone, but history only for staff
             if (user.role === 'driver') {
-                if (user.id) {
-                    await db.collection('drivers').doc(user.id).update({
-                        is_online: true,
-                        online_status: 'online',
-                        last_seen_at: new Date().toISOString()
-                    });
-                }
-            } else if (user.role === 'admin' || user.role === 'super_admin') {
-                if (user.id) {
-                    await db.collection('users').doc(user.id).update({
-                        is_online: true
-                    });
+                await db.collection('drivers').doc(user.id).update({
+                    is_online: true,
+                    online_status: 'online',
+                    last_seen_at: new Date().toISOString()
+                });
+            } else if (user.role !== 'passenger') {
+                // All staff roles (super_admin, director_ceo, finance_manager, etc.)
+                await db.collection('users').doc(user.id).update({
+                    is_online: true
+                });
 
-                    // Log login history
-                    const ipAddress = req.ip || req.connection.remoteAddress || 'unknown';
-                    const userAgent = req.get('user-agent') || 'unknown';
-                    await db.collection('login_history').add({
-                        user_id: user.id,
-                        ip_address: ipAddress,
-                        user_agent: userAgent,
-                        timestamp: new Date().toISOString()
-                    });
-                }
+                // Log login history
+                const ipAddress = req.ip || req.connection.remoteAddress || 'unknown';
+                const userAgent = req.get('user-agent') || 'unknown';
+                await db.collection('login_history').add({
+                    user_id: user.id,
+                    ip_address: ipAddress,
+                    user_agent: userAgent,
+                    timestamp: new Date().toISOString()
+                });
             }
 
             console.log(`Login successful for user: ${user.id} (${user.role})`);

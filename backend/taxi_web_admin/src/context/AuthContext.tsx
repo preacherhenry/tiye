@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../services/api';
+import { ROLE_PERMISSIONS } from '../utils/rbac';
 
 interface User {
     id: string;
@@ -34,16 +35,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const login = async (identifier: string, password: string) => {
         try {
+            console.log('Attempting login for:', identifier);
             const res = await api.post('/login', { identifier, password });
-            if (res.data.success && (res.data.user.role === 'admin' || res.data.user.role === 'super_admin')) {
+            console.log('Login API Response:', res.data);
+
+            const userRole = res.data.user?.role;
+            const isStaff = userRole && ROLE_PERMISSIONS[userRole] && userRole !== 'driver' && userRole !== 'passenger';
+            console.log('Is Staff Role?', isStaff, 'Role:', userRole);
+
+            if (res.data.success && isStaff) {
                 setUser(res.data.user);
                 localStorage.setItem('admin_token', res.data.token);
                 localStorage.setItem('admin_user', JSON.stringify(res.data.user));
                 return true;
             }
             return false;
-        } catch (error) {
-            console.error('Login error:', error);
+        } catch (error: any) {
+            console.error('Login error details:', {
+                message: error.message,
+                response: error.response?.data,
+                status: error.response?.status,
+                config: error.config?.url
+            });
             return false;
         }
     };

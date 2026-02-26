@@ -22,8 +22,12 @@ export const checkOfflineStatus = async () => {
             await batch.commit();
             console.log(`⚠️  [Auto-Offline] ${driversToUpdate.size} driver(s) marked offline due to inactivity.`);
         }
-    } catch (error) {
-        console.error('Error checking offline status:', error);
+    } catch (error: any) {
+        if (error.code === 9) {
+            console.warn('⚠️  Firestore Index required for offline status check.');
+        } else {
+            console.error('Error checking offline status:', error);
+        }
     }
 };
 
@@ -32,32 +36,40 @@ export const checkExpiredSubscriptions = async () => {
         const now = new Date().toISOString();
 
         // 1. Mark driver subscriptions as expired in driver_subscriptions collection
-        const expiredSubs = await db.collection('driver_subscriptions')
-            .where('status', '==', 'active')
-            .where('expiry_date', '<', now)
-            .get();
+        try {
+            const expiredSubs = await db.collection('driver_subscriptions')
+                .where('status', '==', 'active')
+                .where('expiry_date', '<', now)
+                .get();
 
-        if (!expiredSubs.empty) {
-            const batch = db.batch();
-            expiredSubs.docs.forEach(doc => {
-                batch.update(doc.ref, { status: 'expired' });
-            });
-            await batch.commit();
+            if (!expiredSubs.empty) {
+                const batch = db.batch();
+                expiredSubs.docs.forEach(doc => {
+                    batch.update(doc.ref, { status: 'expired' });
+                });
+                await batch.commit();
+            }
+        } catch (e) {
+            console.warn('⚠️  Firestore Index required for driver_subscriptions expiry check.');
         }
 
         // 2. Sync drivers collection status
-        const expiredDrivers = await db.collection('drivers')
-            .where('subscription_status', '==', 'active')
-            .where('subscription_expiry', '<', now)
-            .get();
+        try {
+            const expiredDrivers = await db.collection('drivers')
+                .where('subscription_status', '==', 'active')
+                .where('subscription_expiry', '<', now)
+                .get();
 
-        if (!expiredDrivers.empty) {
-            const batch = db.batch();
-            expiredDrivers.docs.forEach(doc => {
-                batch.update(doc.ref, { subscription_status: 'expired' });
-            });
-            await batch.commit();
-            console.log(`🕒 [Auto-Expiry] ${expiredDrivers.size} driver(s) subscriptions marked as expired.`);
+            if (!expiredDrivers.empty) {
+                const batch = db.batch();
+                expiredDrivers.docs.forEach(doc => {
+                    batch.update(doc.ref, { subscription_status: 'expired' });
+                });
+                await batch.commit();
+                console.log(`🕒 [Auto-Expiry] ${expiredDrivers.size} driver(s) subscriptions marked as expired.`);
+            }
+        } catch (e) {
+            console.warn('⚠️  Firestore Index required for drivers collection subscription sync.');
         }
     } catch (error) {
         console.error('Error checking expired subscriptions:', error);
@@ -87,6 +99,7 @@ export const heartbeat = async (req: Request, res: Response) => {
         const user = userDoc.data()!;
         const driver = driverDoc.data()!;
 
+        const isApproved = user.status === 'approved';
         const isSuspended = user.status === 'suspended';
         const hasActiveSub = driver.subscription_status === 'active';
         const isOnTrip = driver.online_status === 'on_trip';
@@ -94,7 +107,8 @@ export const heartbeat = async (req: Request, res: Response) => {
         let newStatus = 'offline';
         let newIsOnline = false;
 
-        if (!isSuspended) {
+        // ONLY allow online if approved AND not suspended
+        if (isApproved && !isSuspended) {
             if (isOnTrip) {
                 newStatus = 'on_trip';
                 newIsOnline = true;

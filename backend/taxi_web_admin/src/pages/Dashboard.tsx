@@ -12,13 +12,17 @@ import {
 } from 'lucide-react';
 
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 export const Overview: React.FC = () => {
+    const { user } = useAuth();
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         fetchStats();
+        const interval = setInterval(fetchStats, 10000); // Sync every 10 seconds
+        return () => clearInterval(interval);
     }, []);
 
     const fetchStats = async () => {
@@ -56,8 +60,8 @@ export const Overview: React.FC = () => {
         <div className="space-y-8">
             <div className="flex justify-between items-end">
                 <div>
-                    <h2 className="text-3xl font-bold mb-2">Welcome Back, Admin</h2>
-                    <p className="text-gray-400">Here's what's happening on the platform today.</p>
+                    <h2 className="text-3xl font-bold mb-2">Welcome Back, {user?.role.replace(/_/g, ' ')}</h2>
+                    <p className="text-gray-400">Here's what's happening on the platform today, {user?.name}.</p>
                 </div>
                 <div className="flex items-center space-x-2 text-primary bg-primary/10 px-4 py-2 rounded-xl text-sm font-bold border border-primary/20 animate-pulse">
                     <span className="w-2 h-2 bg-primary rounded-full"></span>

@@ -10,6 +10,7 @@ import placesRoutes from './routes/placesRoutes';
 import subscriptionRoutes from './routes/subscriptionRoutes';
 import settingsRoutes from './routes/settingsRoutes';
 import fareRoutes from './routes/fareRoutes';
+import messageRoutes from './routes/messageRoutes';
 
 dotenv.config();
 
@@ -56,6 +57,7 @@ app.use('/', promotionRoutes);
 app.use('/places', placesRoutes);
 app.use('/subscriptions', subscriptionRoutes);
 app.use('/fares', fareRoutes);
+app.use('/messages', messageRoutes);
 
 app.get('/', (req: Request, res: Response) => {
     res.json({ status: "Taxi node backend running" });

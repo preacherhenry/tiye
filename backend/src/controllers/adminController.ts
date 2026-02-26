@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { db } from '../config/firebase';
 import bcrypt from 'bcryptjs';
 import { checkOfflineStatus } from './driverController';
+import { hasPermission } from '../config/roles';
 
 const fixUrl = (url: string | null, req: Request) => {
     if (!url) return null;
@@ -314,14 +315,28 @@ export const getDashboardStats = async (req: Request, res: Response) => {
         // Run cleanup
         await checkOfflineStatus();
 
-        // Fetch data for dashboard
-        const appSnapshot = await db.collection('driver_applications').get();
-        const usersSnapshot = await db.collection('users').get();
-        const ridesSnapshot = await db.collection('rides').where('status', '==', 'completed').get();
-        const onlineDriversSnapshot = await db.collection('drivers').where('online_status', '!=', 'offline').get();
+        // Fetch data for dashboard with index-resilience
+        const [appSnapshot, usersSnapshot] = await Promise.all([
+            db.collection('driver_applications').get(),
+            db.collection('users').get()
+        ]);
+
+        let ridesSnapshot: any = { docs: [] };
+        try {
+            ridesSnapshot = await db.collection('rides').where('status', '==', 'completed').get();
+        } catch (e) {
+            console.warn('⚠️  Firestore Index required for revenue calculation. Skipping for now.');
+        }
+
+        let onlineDriversSnapshot: any = { size: 0 };
+        try {
+            onlineDriversSnapshot = await db.collection('drivers').where('online_status', '!=', 'offline').get();
+        } catch (e) {
+            console.warn('⚠️  Firestore Index required for online drivers count. Skipping for now.');
+        }
 
         let revenue = 0;
-        ridesSnapshot.docs.forEach(doc => revenue += Number(doc.data().fare || 0));
+        ridesSnapshot.docs.forEach((doc: any) => revenue += Number(doc.data().fare || 0));
 
         let suspended = 0;
         let passengers = 0;
@@ -350,13 +365,18 @@ export const getDashboardStats = async (req: Request, res: Response) => {
             else if (data.status === 'rejected') stats.rejected++;
         });
 
-        // Recent Activity (Latest 5 applications)
-        const recentAppsSnapshot = await db.collection('driver_applications')
-            .orderBy('created_at', 'desc')
-            .limit(5)
-            .get();
+        // Recent Activity (Latest 5 applications) - with index-resilience
+        let recentAppsSnapshot: any = { docs: [] };
+        try {
+            recentAppsSnapshot = await db.collection('driver_applications')
+                .orderBy('created_at', 'desc')
+                .limit(5)
+                .get();
+        } catch (e) {
+            console.warn('⚠️  Firestore Index required for recent applications list. Skipping for now.');
+        }
 
-        const recentActivity = await Promise.all(recentAppsSnapshot.docs.map(async (doc) => {
+        const recentActivity = await Promise.all(recentAppsSnapshot.docs.map(async (doc: any) => {
             const app = doc.data();
             const userDoc = await db.collection('users').doc(app.user_id).get();
             const userData = userDoc.data() || {};
@@ -425,22 +445,28 @@ export const toggleDriverStatus = async (req: Request, res: Response) => {
         return res.json({ success: false, message: 'Invalid status' });
     }
 
-    // Only super_admin can activate/approve
-    if (status === 'approved' && adminUser?.role !== 'super_admin') {
-        return res.status(403).json({ success: false, message: 'Only Super Admin can activate drivers' });
+    const userRole = adminUser?.role;
+
+    // Use permission-based check instead of hardcoded 'super_admin'
+    if (status === 'approved' && !hasPermission(userRole, 'driver:approve')) {
+        return res.status(403).json({ success: false, message: 'Unauthorized: You do not have permission to approve drivers' });
     }
 
     try {
         const userRef = db.collection('users').doc(id);
+        const userDoc = await userRef.get();
+        if (!userDoc.exists) return res.status(404).json({ success: false, message: 'User not found' });
+
         await userRef.update({ status });
 
-        // Log the action
+        // Audit log is already handled in rbacMiddleware if using authorize, 
+        // but here we might need manual logging for specific data.
         await db.collection('audit_logs').add({
             user_id: adminId,
             action: 'update_user_status',
             target_type: 'user',
             target_id: id,
-            details: JSON.stringify({ status }),
+            details: JSON.stringify({ old_status: userDoc.data()?.status, new_status: status }),
             timestamp: new Date().toISOString()
         });
 
@@ -650,6 +676,21 @@ export const getAllAdmins = async (req: Request, res: Response) => {
 
 export const createAdmin = async (req: Request, res: Response) => {
     const { name, email, phone, password, role } = req.body;
+    const adminUser = (req as any).user;
+
+    const validRoles = [
+        'super_admin', 'director_ceo', 'finance_manager', 'accounts_assistant',
+        'driver_relations_manager', 'operations_supervisor', 'it_manager', 'system_admin_developer'
+    ];
+
+    if (role && !validRoles.includes(role)) {
+        return res.status(400).json({ success: false, message: 'Invalid role assignment' });
+    }
+
+    // Double check Super Admin requirement for role assignment
+    if (adminUser?.role !== 'super_admin' && role) {
+        return res.status(403).json({ success: false, message: 'Only Super Admin can assign roles' });
+    }
 
     try {
         // Check if email already exists
@@ -680,9 +721,25 @@ export const createAdmin = async (req: Request, res: Response) => {
 export const toggleAdminStatus = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { status } = req.body;
+    const adminId = (req as any).user?.id || null;
 
     try {
-        await db.collection('users').doc(id).update({ status });
+        const userRef = db.collection('users').doc(id);
+        const userDoc = await userRef.get();
+        if (!userDoc.exists) return res.status(404).json({ success: false, message: 'Admin not found' });
+
+        await userRef.update({ status });
+
+        // Audit log
+        await db.collection('audit_logs').add({
+            user_id: adminId,
+            action: 'update_admin_status',
+            target_type: 'admin',
+            target_id: id,
+            details: JSON.stringify({ old_status: userDoc.data()?.status, new_status: status }),
+            timestamp: new Date().toISOString()
+        });
+
         res.json({ success: true, message: `Admin status updated to ${status}` });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -692,9 +749,39 @@ export const toggleAdminStatus = async (req: Request, res: Response) => {
 export const updateAdminRole = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { role } = req.body;
+    const adminUser = (req as any).user;
+    const adminId = adminUser?.id || null;
+
+    const validRoles = [
+        'super_admin', 'director_ceo', 'finance_manager', 'accounts_assistant',
+        'driver_relations_manager', 'operations_supervisor', 'it_manager', 'system_admin_developer'
+    ];
+
+    if (!validRoles.includes(role)) {
+        return res.status(400).json({ success: false, message: 'Invalid role' });
+    }
+
+    if (adminUser?.role !== 'super_admin') {
+        return res.status(403).json({ success: false, message: 'Only Super Admin can modify roles' });
+    }
 
     try {
-        await db.collection('users').doc(id).update({ role });
+        const userRef = db.collection('users').doc(id);
+        const userDoc = await userRef.get();
+        if (!userDoc.exists) return res.status(404).json({ success: false, message: 'Admin not found' });
+
+        await userRef.update({ role });
+
+        // Audit log
+        await db.collection('audit_logs').add({
+            user_id: adminId,
+            action: 'update_admin_role',
+            target_type: 'admin',
+            target_id: id,
+            details: JSON.stringify({ old_role: userDoc.data()?.role, new_role: role }),
+            timestamp: new Date().toISOString()
+        });
+
         res.json({ success: true, message: `Admin role updated to ${role}` });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });

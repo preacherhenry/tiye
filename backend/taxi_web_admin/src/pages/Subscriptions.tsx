@@ -35,9 +35,9 @@ interface Subscription {
     driver_name: string;
     driver_phone: string;
     plan_name: string;
-    price: number;
+    price: number | string;
     duration_days: number;
-    screenshot_url: string;
+    screenshot_url: string | null;
     status: 'pending' | 'active' | 'expired' | 'rejected' | 'paused';
     start_date: string;
     expiry_date: string;
@@ -129,7 +129,9 @@ const Subscriptions: React.FC = () => {
 
     const pendingCount = subscriptions.filter(s => s.status === 'pending').length;
     const activeCount = subscriptions.filter(s => s.status === 'active').length;
-    const totalRevenue = subscriptions.filter(s => s.status === 'active').reduce((acc, s) => acc + Number(s.price), 0);
+    const totalRevenue = subscriptions
+        .filter(s => s.status === 'active' && typeof s.price === 'number')
+        .reduce((acc, s) => acc + Number(s.price), 0);
 
     return (
         <div className="space-y-8 pb-10">
@@ -265,15 +267,22 @@ const Subscriptions: React.FC = () => {
                                             </div>
                                         </td>
                                         <td className="py-6">
-                                            <a
-                                                href={sub.screenshot_url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="flex items-center text-xs text-primary hover:underline group/img"
-                                            >
-                                                <FileText className="w-4 h-4 mr-2" />
-                                                View Screenshot
-                                            </a>
+                                            {sub.screenshot_url ? (
+                                                <a
+                                                    href={sub.screenshot_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center text-xs text-primary hover:underline group/img"
+                                                >
+                                                    <FileText className="w-4 h-4 mr-2" />
+                                                    View Screenshot
+                                                </a>
+                                            ) : (
+                                                <span className="text-[10px] text-gray-600 font-black uppercase flex items-center">
+                                                    <XCircle className="w-3 h-3 mr-1" />
+                                                    Restricted
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="py-6">
                                             <span className={`text-[10px] font-black tracking-widest uppercase px-2 py-0.5 rounded-lg ${sub.status === 'active' ? 'text-green-500 bg-green-500/10' :
@@ -291,24 +300,30 @@ const Subscriptions: React.FC = () => {
                                         <td className="py-6 text-right">
                                             {sub.status === 'pending' ? (
                                                 <div className="flex justify-end space-x-2">
-                                                    <button
-                                                        onClick={() => handleVerifySubscription(sub.id, 'rejected')}
-                                                        className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 transition-all hover:text-black"
-                                                        title="Reject Payment"
-                                                    >
-                                                        <XCircle className="w-5 h-5" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleVerifySubscription(sub.id, 'active')}
-                                                        className="p-2 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500 transition-all hover:text-black"
-                                                        title="Approve Subscription"
-                                                    >
-                                                        <CheckCircle2 className="w-5 h-5" />
-                                                    </button>
+                                                    {sub.screenshot_url ? (
+                                                        <>
+                                                            <button
+                                                                onClick={() => handleVerifySubscription(sub.id, 'rejected')}
+                                                                className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 transition-all hover:text-black"
+                                                                title="Reject Payment"
+                                                            >
+                                                                <XCircle className="w-5 h-5" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleVerifySubscription(sub.id, 'active')}
+                                                                className="p-2 bg-green-500/10 text-green-500 rounded-lg hover:bg-green-500 transition-all hover:text-black"
+                                                                title="Approve Subscription"
+                                                            >
+                                                                <CheckCircle2 className="w-5 h-5" />
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-[10px] text-gray-500 font-black uppercase">Unauthorized</span>
+                                                    )}
                                                 </div>
                                             ) : (
                                                 <div className="flex justify-end space-x-2">
-                                                    {(sub.status === 'active' || sub.status === 'paused') && (
+                                                    {(sub.status === 'active' || sub.status === 'paused') && sub.screenshot_url && (
                                                         <button
                                                             onClick={async () => {
                                                                 const newStatus = sub.status === 'paused' ? 'active' : 'paused';
@@ -325,17 +340,21 @@ const Subscriptions: React.FC = () => {
                                                             {sub.status === 'paused' ? <Play className="w-5 h-5" /> : <Pause className="w-5 h-5" />}
                                                         </button>
                                                     )}
-                                                    <button
-                                                        onClick={async () => {
-                                                            if (!window.confirm('PERMANENT DELETE: Are you sure? This is usually for refunds.')) return;
-                                                            await api.delete(`/subscriptions/admin/subscriptions/${sub.id}`);
-                                                            fetchSubscriptions();
-                                                        }}
-                                                        className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 transition-all hover:text-black"
-                                                        title="Permanently Delete"
-                                                    >
-                                                        <Trash2 className="w-5 h-5" />
-                                                    </button>
+                                                    {sub.screenshot_url ? (
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (!window.confirm('PERMANENT DELETE: Are you sure? This is usually for refunds.')) return;
+                                                                await api.delete(`/subscriptions/admin/subscriptions/${sub.id}`);
+                                                                fetchSubscriptions();
+                                                            }}
+                                                            className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 transition-all hover:text-black"
+                                                            title="Permanently Delete"
+                                                        >
+                                                            <Trash2 className="w-5 h-5" />
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-[10px] text-gray-500 font-black uppercase">Viewing Only</span>
+                                                    )}
                                                 </div>
                                             )}
                                         </td>

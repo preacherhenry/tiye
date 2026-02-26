@@ -16,6 +16,7 @@ import AdminPanel from './pages/AdminPanel';
 import Settings from './pages/Settings';
 import Promotions from './pages/Promotions';
 import Subscriptions from './pages/Subscriptions';
+import Communications from './pages/Communications';
 import Fares from './pages/Fares';
 import Places from './pages/Places';
 
@@ -28,12 +29,14 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-const SuperAdminRoute = ({ children }: { children: React.ReactNode }) => {
+import { hasPermission, type Permission } from './utils/rbac';
+
+const PermissionRoute = ({ children, permission }: { children: React.ReactNode, permission: Permission }) => {
   const { user, loading } = useAuth();
 
   if (loading) return null;
   if (!user) return <Navigate to="/login" />;
-  if (user.role !== 'super_admin') return <Navigate to="/" />;
+  if (!hasPermission(user.role, permission)) return <Navigate to="/" />;
 
   return <>{children}</>;
 };
@@ -53,28 +56,29 @@ const App: React.FC = () => {
             }
           >
             <Route index element={<Overview />} />
-            <Route path="applications" element={<Applications />} />
-            <Route path="rejected" element={<Applications status="rejected" />} />
-            <Route path="applications/:id" element={<ApplicationDetail />} />
-            <Route path="analytics" element={<Analytics />} />
-            <Route path="drivers" element={<Drivers />} />
-            <Route path="drivers/:id" element={<DriverProfile />} />
-            <Route path="drivers/:id/subscriptions" element={<DriverSubscriptions />} />
-            <Route path="passengers" element={<Passengers />} />
-            <Route path="passengers/:id" element={<PassengerProfile />} />
-            <Route path="trips/:id" element={<TripDetails />} />
-            <Route path="promotions" element={<Promotions />} />
-            <Route path="subscriptions" element={<Subscriptions />} />
-            <Route path="fares" element={<Fares />} />
-            <Route path="places" element={<Places />} />
+            <Route path="messages" element={<Communications />} />
+            <Route path="applications" element={<PermissionRoute permission="driver:manage"><Applications /></PermissionRoute>} />
+            <Route path="rejected" element={<PermissionRoute permission="driver:manage"><Applications status="rejected" /></PermissionRoute>} />
+            <Route path="applications/:id" element={<PermissionRoute permission="driver:manage"><ApplicationDetail /></PermissionRoute>} />
+            <Route path="analytics" element={<PermissionRoute permission="finance:dashboard"><Analytics /></PermissionRoute>} />
+            <Route path="drivers" element={<PermissionRoute permission="driver:manage"><Drivers /></PermissionRoute>} />
+            <Route path="drivers/:id" element={<PermissionRoute permission="driver:manage"><DriverProfile /></PermissionRoute>} />
+            <Route path="drivers/:id/subscriptions" element={<PermissionRoute permission="finance:dashboard"><DriverSubscriptions /></PermissionRoute>} />
+            <Route path="passengers" element={<PermissionRoute permission="ride:monitor"><Passengers /></PermissionRoute>} />
+            <Route path="passengers/:id" element={<PermissionRoute permission="ride:monitor"><PassengerProfile /></PermissionRoute>} />
+            <Route path="trips/:id" element={<PermissionRoute permission="ride:monitor"><TripDetails /></PermissionRoute>} />
+            <Route path="promotions" element={<PermissionRoute permission="report:view_all"><Promotions /></PermissionRoute>} />
+            <Route path="subscriptions" element={<PermissionRoute permission="finance:dashboard"><Subscriptions /></PermissionRoute>} />
+            <Route path="fares" element={<PermissionRoute permission="report:view_all"><Fares /></PermissionRoute>} />
+            <Route path="places" element={<PermissionRoute permission="report:view_all"><Places /></PermissionRoute>} />
             <Route path="settings" element={<Settings />} />
           </Route>
           <Route
             path="/admin"
             element={
-              <SuperAdminRoute>
+              <PermissionRoute permission="user:manage">
                 <Dashboard />
-              </SuperAdminRoute>
+              </PermissionRoute>
             }
           >
             <Route index element={<AdminPanel />} />

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { db } from '../config/firebase';
+import { hasPermission } from '../config/roles';
 
 export const getPlans = async (req: Request, res: Response) => {
     try {
@@ -52,8 +53,10 @@ export const submitSubscription = async (req: Request, res: Response) => {
 export const adminGetSubscriptions = async (req: Request, res: Response) => {
     try {
         const subsSnapshot = await db.collection('driver_subscriptions').orderBy('created_at', 'desc').get();
+        const userRole = (req as any).user?.role;
+        const canViewFinancials = hasPermission(userRole, 'finance:view_docs');
 
-        const subscriptions = await Promise.all(subsSnapshot.docs.map(async (doc) => {
+        const subscriptions = await Promise.all(subsSnapshot.docs.map(async (doc: any) => {
             const sub = doc.data();
             const userDoc = await db.collection('users').doc(sub.driver_id).get();
             const planDoc = await db.collection('subscription_plans').doc(sub.plan_id).get();
@@ -67,7 +70,9 @@ export const adminGetSubscriptions = async (req: Request, res: Response) => {
                 driver_name: userData.name,
                 driver_phone: userData.phone,
                 plan_name: planData.name,
-                price: planData.price,
+                // Mask sensitive info if no permission
+                price: canViewFinancials ? planData.price : '***',
+                screenshot_url: canViewFinancials ? sub.screenshot_url : null,
                 duration_days: planData.duration_days
             };
         }));
