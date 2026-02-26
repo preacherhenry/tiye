@@ -25,11 +25,6 @@ const Sidebar: React.FC = () => {
     const { logout, user } = useAuth();
     const [unreadCount, setUnreadCount] = useState(0);
 
-    const navItems = [
-        { icon: LayoutDashboard, label: 'Overview', path: '/' },
-        { icon: MessageSquare, label: 'Messages', path: '/messages', badge: unreadCount },
-    ];
-
     useEffect(() => {
         if (!user) return;
         
@@ -47,32 +42,40 @@ const Sidebar: React.FC = () => {
         return () => clearInterval(interval);
     }, [user]);
 
-    if (hasPermission(user?.role, 'driver:manage')) {
-        navItems.push({ icon: Users, label: 'Drivers', path: '/drivers' });
-        navItems.push({ icon: FileCheck, label: 'Applications', path: '/applications' });
-        navItems.push({ icon: XCircle, label: 'Rejected', path: '/rejected' });
-    }
+    const navItems = React.useMemo(() => {
+        const items = [
+            { icon: LayoutDashboard, label: 'Overview', path: '/' },
+            { icon: MessageSquare, label: 'Messages', path: '/messages', badge: unreadCount },
+        ];
 
-    if (hasPermission(user?.role, 'ride:monitor')) {
-        navItems.push({ icon: User, label: 'Passengers', path: '/passengers' });
-    }
+        if (hasPermission(user?.role, 'driver:manage')) {
+            items.push({ icon: Users, label: 'Drivers', path: '/drivers' });
+            items.push({ icon: FileCheck, label: 'Applications', path: '/applications' });
+            items.push({ icon: XCircle, label: 'Rejected', path: '/rejected' });
+        }
 
-    if (hasPermission(user?.role, 'finance:dashboard')) {
-        navItems.push({ icon: BarChart3, label: 'Analytics', path: '/analytics' });
-        navItems.push({ icon: CreditCard, label: 'Subscriptions', path: '/subscriptions' });
-    }
+        if (hasPermission(user?.role, 'ride:monitor')) {
+            items.push({ icon: User, label: 'Passengers', path: '/passengers' });
+        }
 
-    if (hasPermission(user?.role, 'report:view_all')) {
-        navItems.push({ icon: Map, label: 'Fares', path: '/fares' });
-        navItems.push({ icon: Tag, label: 'Promotions', path: '/promotions' });
-        navItems.push({ icon: MapPin, label: 'Places', path: '/places' });
-    }
+        if (hasPermission(user?.role, 'finance:dashboard')) {
+            items.push({ icon: BarChart3, label: 'Analytics', path: '/analytics' });
+            items.push({ icon: CreditCard, label: 'Subscriptions', path: '/subscriptions' });
+        }
 
-    if (hasPermission(user?.role, 'user:manage')) {
-        navItems.push({ icon: ShieldCheck, label: 'Admin Panel', path: '/admin' });
-    }
+        if (hasPermission(user?.role, 'report:view_all')) {
+            items.push({ icon: Map, label: 'Fares', path: '/fares' });
+            items.push({ icon: Tag, label: 'Promotions', path: '/promotions' });
+            items.push({ icon: MapPin, label: 'Places', path: '/places' });
+        }
 
-    navItems.push({ icon: Settings, label: 'Settings', path: '/settings' });
+        if (hasPermission(user?.role, 'user:manage')) {
+            items.push({ icon: ShieldCheck, label: 'Admin Panel', path: '/admin' });
+        }
+
+        items.push({ icon: Settings, label: 'Settings', path: '/settings' });
+        return items;
+    }, [user, unreadCount]);
 
     return (
         <div className="w-64 h-screen bg-surface border-r border-white/5 flex flex-col fixed left-0 top-0 z-50">
