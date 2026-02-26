@@ -13,15 +13,10 @@ export const getConversations = async (req: Request, res: Response) => {
         // For simplicity in this demo, we'll fetch all conversations the user is part of
         const convsSnapshot = await db.collection('conversations')
             .where('participants', 'array-contains', userId)
+            .orderBy('updated_at', 'desc')
             .get();
 
-        const conversations = convsSnapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() as any }))
-            .sort((a, b) => {
-                const dateA = new Date(a.updated_at || 0).getTime();
-                const dateB = new Date(b.updated_at || 0).getTime();
-                return dateB - dateA; // Descending
-            });
+        const conversations = convsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
 
         // Also fetch department conversations? 
         // A better way: users are automatically added to department conversations on creation or first login.
@@ -62,15 +57,10 @@ export const getMessages = async (req: Request, res: Response) => {
     try {
         const messagesSnapshot = await db.collection('messages')
             .where('conversation_id', '==', conversationId)
+            .orderBy('created_at', 'asc')
             .get();
 
-        const messages = messagesSnapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() as any }))
-            .sort((a, b) => {
-                const dateA = new Date(a.created_at || 0).getTime();
-                const dateB = new Date(b.created_at || 0).getTime();
-                return dateA - dateB; // Ascending
-            });
+        const messages = messagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() as any }));
         res.json({ success: true, messages });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
