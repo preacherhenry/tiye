@@ -555,8 +555,9 @@ export const syncAllDriverSubscriptions = async () => {
             // Sync if profile is inconsistent
             const statusMismatch = driverData.subscription_status !== targetStatus;
             const expiryMismatch = targetStatus === 'active' && driverData.subscription_expiry !== bestExpiry;
+            const onlineWhenNotActive = targetStatus !== 'active' && driverData.is_online === true;
 
-            if (statusMismatch || expiryMismatch) {
+            if (statusMismatch || expiryMismatch || onlineWhenNotActive) {
                 const updateData: any = {
                     subscription_status: targetStatus,
                     subscription_expiry: bestExpiry
