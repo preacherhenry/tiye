@@ -10,33 +10,38 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-async function forceDisconnectGrace() {
+async function cleanGraceSubs() {
     const driverId = 'sJVUcB1CQ06aA88imUxS'; // Grace's ID
+    const now = new Date().toISOString();
 
     try {
-        console.log(`--- Forcing Disconnect for Grace ---`);
-        const driverDoc = await db.collection('drivers').doc(driverId).get();
-        if (!driverDoc.exists) return console.log('Driver not found');
-        
-        console.log('Current Status:', driverDoc.data().subscription_status);
-        console.log('Current Online:', driverDoc.data().is_online);
+        console.log(`--- Expiring Grace's Individual Sub Records ---`);
+        const subsSnapshot = await db.collection('driver_subscriptions')
+            .where('driver_id', '==', driverId)
+            .get();
 
-        await db.collection('drivers').doc(driverId).update({
-            subscription_status: 'expired',
-            is_online: false,
-            online_status: 'offline'
-        });
-        
-        // Also ensure user collection is synced
-        await db.collection('users').doc(driverId).update({
-            is_online: false
+        const batch = db.batch();
+        let count = 0;
+
+        subsSnapshot.forEach(doc => {
+            const sub = doc.data();
+            if (sub.status === 'active' && sub.expiry_date <= now) {
+                console.log(`Expiring sub ${doc.id}`);
+                batch.update(doc.ref, { status: 'expired' });
+                count++;
+            }
         });
 
-        console.log('Update successful: Grace is now offline and expired.');
+        if (count > 0) {
+            await batch.commit();
+            console.log(`Successfully expired ${count} records.`);
+        } else {
+            console.log('No active/expired records found for Grace.');
+        }
 
     } catch (error) {
         console.error('Error:', error);
     }
 }
 
-forceDisconnectGrace();
+cleanGraceSubs();

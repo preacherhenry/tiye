@@ -538,6 +538,9 @@ export const syncAllDriverSubscriptions = async () => {
                         }
                     } else {
                         expiredSubFound = true;
+                        // MARK SUB RECORD AS EXPIRED
+                        batch.update(subDoc.ref, { status: 'expired' });
+                        updateFound = true;
                     }
                 } else if (sub.status === 'paused') {
                     pausedSubFound = true;
