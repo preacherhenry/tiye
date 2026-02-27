@@ -7,9 +7,11 @@ import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
-import { useAudioPlayer, setAudioModeAsync, createAudioPlayer, AudioPlayer } from 'expo-audio';
+import { Audio } from 'expo-av';
 // @ts-ignore
 import * as FileSystem from 'expo-file-system/legacy';
+
+import { SubscriptionMonitor } from './components/SubscriptionMonitor';
 
 const { width, height } = Dimensions.get('window');
 
@@ -78,6 +80,31 @@ export const DriverDashboard = ({ navigation }: any) => {
     // If not active, polling for rides will stop and they will appear offline to others.
     const [isOnline, setIsOnline] = useState(user?.subscription_status === 'active');
 
+    // Trip Distance Tracking
+    const [rideDistance, setRideDistance] = useState(0);
+    const lastCoordRef = useRef<any>(null);
+    const activeRideRef = useRef<any>(null);
+
+    useEffect(() => {
+        activeRideRef.current = activeRide;
+        if (!activeRide) {
+            setRideDistance(0);
+            lastCoordRef.current = null;
+        }
+    }, [activeRide]);
+
+    const getDistanceBetween = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+        const R = 6371; // km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    };
+
     useEffect(() => {
         setIsOnline(user?.subscription_status === 'active');
     }, [user?.subscription_status]);
@@ -113,33 +140,72 @@ export const DriverDashboard = ({ navigation }: any) => {
     const audioUrl = 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3';
     const localAudioPath = FileSystem.documentDirectory + 'notification.mp3';
 
-    // Manually manage player to avoid "released object" crashes from hook re-renders
-    const playerRef = useRef<AudioPlayer | null>(null);
+    // Manually manage sound object
+    const soundRef = useRef<Audio.Sound | null>(null);
     const previousRideCount = useRef(0);
 
     // Initial Setup: Download sound & Create Player
     useEffect(() => {
         const prepareSound = async () => {
+            const soundUrls = [
+                'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3',
+                'https://www.soundjay.com/buttons/sounds/button-3.mp3', // Backup 1
+                'https://actions.google.com/sounds/v1/alarms/beep_short.ogg' // Backup 2
+            ];
+
             try {
                 const fileInfo = await FileSystem.getInfoAsync(localAudioPath);
-                if (!fileInfo.exists) {
-                    console.log('⬇️ Downloading notification sound...');
-                    await FileSystem.downloadAsync(audioUrl, localAudioPath);
-                    console.log('✅ Sound downloaded to:', localAudioPath);
+
+                // If missing or invalid size
+                if (!fileInfo.exists || (fileInfo.size && fileInfo.size < 1000)) {
+                    console.log('⬇️ Sound file missing or invalid. Attempting download...');
+
+                    if (fileInfo.exists) {
+                        try { await FileSystem.deleteAsync(localAudioPath); } catch (e) { }
+                    }
+
+                    // Try download with fallback URLs
+                    let downloaded = false;
+                    for (const url of soundUrls) {
+                        try {
+                            console.log(`⬇️ Trying URL: ${url}`);
+                            const result = await FileSystem.downloadAsync(url, localAudioPath);
+                            if (result.status === 200) {
+                                console.log('✅ Download successful!');
+                                downloaded = true;
+                                break;
+                            }
+                        } catch (e) {
+                            console.log(`❌ Failed to download from ${url}`);
+                        }
+                    }
+
+                    if (!downloaded) {
+                        console.error('❌ All sound download attempts failed.');
+                    }
                 } else {
-                    console.log('✅ Sound already exists at:', localAudioPath);
+                    console.log('✅ Valid sound file found locally.');
                 }
 
-                // Create player persistence instance
-                if (!playerRef.current) {
-                    playerRef.current = createAudioPlayer(localAudioPath);
-                    console.log('🎹 Audio Player Created Manually');
-                }
+                // Initialize sound object regardless (might fail if download failed, but safe to try)
+                const { sound } = await Audio.Sound.createAsync(
+                    { uri: localAudioPath },
+                    { shouldPlay: false }
+                );
+                soundRef.current = sound;
+                console.log('🎹 Audio Player Created (expo-av)');
+
             } catch (e) {
                 console.error('Failed to prepare audio:', e);
             }
         };
         prepareSound();
+
+        return () => {
+            if (soundRef.current) {
+                soundRef.current.unloadAsync();
+            }
+        };
     }, []);
 
     const startLocationTracking = async () => {
@@ -159,6 +225,27 @@ export const DriverDashboard = ({ navigation }: any) => {
             },
             (newLoc: Location.LocationObject) => {
                 setLocation(newLoc);
+
+                // Track distance if trip is in progress
+                const ar = activeRideRef.current;
+                if (ar && ar.status === 'in_progress') {
+                    if (lastCoordRef.current) {
+                        const d = getDistanceBetween(
+                            lastCoordRef.current.latitude,
+                            lastCoordRef.current.longitude,
+                            newLoc.coords.latitude,
+                            newLoc.coords.longitude
+                        );
+                        // Filter out minor GPS jitter (less than 10 meters)
+                        if (d > 0.01) {
+                            setRideDistance(prev => prev + d);
+                        }
+                    }
+                    lastCoordRef.current = newLoc.coords;
+                } else {
+                    lastCoordRef.current = null;
+                }
+
                 if (user?.id) {
                     api.post('/update-location', {
                         userId: user.id,
@@ -187,13 +274,13 @@ export const DriverDashboard = ({ navigation }: any) => {
         // Configure Audio Session for Background Playback
         const configureAudio = async () => {
             try {
-                await setAudioModeAsync({
-                    shouldPlayInBackground: true,
-                    playsInSilentMode: true,
-                    interruptionMode: 'duckOthers',
-                    shouldRouteThroughEarpiece: false
+                await Audio.setAudioModeAsync({
+                    staysActiveInBackground: true,
+                    playsInSilentModeIOS: true,
+                    shouldDuckAndroid: true,
+                    playThroughEarpieceAndroid: false
                 });
-                console.log('✅ Background Audio Mode Configured');
+                console.log('✅ Background Audio Mode Configured (expo-av)');
             } catch (e) {
                 console.error('❌ Failed to configure background audio', e);
             }
@@ -206,10 +293,11 @@ export const DriverDashboard = ({ navigation }: any) => {
         };
     }, [user]);
 
-    // Also poll for pending rides if online
+    // Also poll for pending rides (Strict: Only if subscription is active)
     useEffect(() => {
         let interval: any;
         if (isOnline && !activeRide) {
+            console.log("🔄 Polling for pending rides...");
             fetchPendingRides();
             interval = setInterval(fetchPendingRides, 5000);
         }
@@ -273,20 +361,22 @@ export const DriverDashboard = ({ navigation }: any) => {
             // Vibrate with a distinctive pattern
             Vibration.vibrate([0, 500, 200, 500, 200, 500]);
 
-            if (playerRef.current) {
-                console.log('🔊 Player State:', playerRef.current.currentStatus ? (playerRef.current.currentStatus.isLoaded ? 'Loaded' : 'Loading') : 'Unknown');
+            if (soundRef.current) {
+                try {
+                    await soundRef.current.replayAsync();
+                    console.log('🔊 Playing notification sound (1/2)');
 
-                playerRef.current.seekTo(0);
-                playerRef.current.play();
+                    // Play again after a delay
+                    setTimeout(async () => {
+                        if (soundRef.current) {
+                            console.log('🔊 Playing notification sound (2/2)');
+                            await soundRef.current.replayAsync();
+                        }
+                    }, 2000);
 
-                // Play again after a delay
-                setTimeout(() => {
-                    if (playerRef.current) {
-                        console.log('🔊 Playing notification sound (2/2) via expo-audio');
-                        playerRef.current.seekTo(0);
-                        playerRef.current.play();
-                    }
-                }, 2000);
+                } catch (e) {
+                    console.log('Playback error', e);
+                }
             }
         } catch (error) {
             console.error('❌ Sound playback error:', error);
@@ -460,7 +550,11 @@ export const DriverDashboard = ({ navigation }: any) => {
 
     const handleUpdateStatus = async (status: string) => {
         try {
-            const res = await api.post('/update-ride-status', { ride_id: activeRide.id, status });
+            const res = await api.post('/update-ride-status', {
+                ride_id: activeRide.id,
+                status,
+                distance: status === 'completed' ? rideDistance : undefined
+            });
             if (res.data.success) {
                 if (status === 'completed') {
                     setActiveRide(null);
@@ -530,20 +624,18 @@ export const DriverDashboard = ({ navigation }: any) => {
             </TouchableOpacity>
 
             {!isOnline && (
-                <View style={styles.subscriptionWarning}>
+                <View style={[styles.subscriptionWarning, { backgroundColor: user?.subscription_status === 'pending' ? '#3498db' : '#e74c3c' }]}>
                     <Text style={styles.warningText}>
                         {user?.subscription_status === 'pending'
-                            ? "⏳ Subscription verification in progress..."
-                            : user?.subscription_status === 'paused'
-                                ? "⏸️ Your subscription is currently PAUSED"
-                                : "⚠️ Subscription expired or inactive"}
+                            ? "⏳ Payment verification in progress..."
+                            : "⛔ No Active Subscription. You cannot receive rides."}
                     </Text>
                     <TouchableOpacity
                         style={styles.warningButton}
                         onPress={() => navigation.navigate('Subscription')}
                     >
                         <Text style={styles.warningButtonText}>
-                            {user?.subscription_status === 'pending' ? "VIEW STATUS" : user?.subscription_status === 'paused' ? "DETAILS" : "FIX NOW"}
+                            {user?.subscription_status === 'pending' ? "CHECK STATUS" : "PAY NOW"}
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -621,6 +713,8 @@ export const DriverDashboard = ({ navigation }: any) => {
                 onLogout={handleLogout}
                 navigation={navigation}
             />
+
+            <SubscriptionMonitor navigation={navigation} />
         </View>
     );
 };
