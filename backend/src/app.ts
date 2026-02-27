@@ -65,13 +65,13 @@ app.get('/', (req: Request, res: Response) => {
 
 import { syncAllDriverSubscriptions } from './controllers/subscriptionController';
 
+// Start Background Jobs
+console.log('⏰ Starting 2s Subscription Real-time Sync...');
+setInterval(syncAllDriverSubscriptions, 2000); // 2 seconds
+
 if (require.main === module) {
     app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
-
-        // Start Background Jobs
-        console.log('⏰ Starting 10m Subscription Failsafe Sync...');
-        setInterval(syncAllDriverSubscriptions, 600000); // 10 minutes
     });
 }
 

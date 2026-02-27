@@ -108,8 +108,7 @@ export const adminVerifySubscription = async (req: Request, res: Response) => {
 
         if (status === 'active') {
             const startDate = new Date();
-            const expiryDate = new Date();
-            expiryDate.setDate(startDate.getDate() + (plan.duration_days || 0));
+            const expiryDate = new Date(startDate.getTime() + (plan.duration_days * 24 * 60 * 60 * 1000));
 
             const batch = db.batch();
             batch.update(subRef, {
