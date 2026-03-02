@@ -567,7 +567,7 @@ export const DriverDashboard = ({ navigation }: any) => {
         if (activeRide && location && pickupCoords) {
             const isToPickup = activeRide.status === 'accepted' || activeRide.status === 'arrived';
 
-            if (isToPickup) {
+            if (isToPickup && !activeRide.is_manual_destination) {
                 calculateDriverRoute(pickupCoords);
             } else if (destinationCoords && !activeRide.is_manual_destination) {
                 calculateDriverRoute(destinationCoords);
@@ -647,7 +647,7 @@ export const DriverDashboard = ({ navigation }: any) => {
                 showsUserLocation={true}
             >
                 {/* Driver Route */}
-                {activeRide && routeCoords.length > 0 && (
+                {activeRide && !activeRide.is_manual_destination && routeCoords.length > 0 && (
                     <Polyline
                         coordinates={routeCoords}
                         strokeColor={Colors.primary}
