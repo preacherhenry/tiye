@@ -762,7 +762,11 @@ export const DriverDashboard = ({ navigation }: any) => {
                     <View style={styles.passengerSection}>
                         <View style={styles.passengerInfo}>
                             <View style={styles.passengerAvatar}>
-                                <Text style={styles.passengerAvatarText}>{activeRide.passenger_name?.[0] || 'P'}</Text>
+                                {activeRide.passenger_photo ? (
+                                    <Image source={{ uri: activeRide.passenger_photo }} style={{ width: 44, height: 44, borderRadius: 22 }} />
+                                ) : (
+                                    <Text style={styles.passengerAvatarText}>{activeRide.passenger_name?.[0] || 'P'}</Text>
+                                )}
                             </View>
                             <View style={{ marginLeft: 12, flex: 1 }}>
                                 <Text style={styles.passengerName}>{activeRide.passenger_name || 'Passenger'}</Text>

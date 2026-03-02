@@ -27,6 +27,7 @@ export const getRideDetails = async (req: Request, res: Response) => {
                 const pData = passengerUserDoc.data()!;
                 ride.passenger_name = pData.name;
                 ride.passenger_phone = pData.phone;
+                ride.passenger_photo = pData.profile_photo;
             }
         }
 
@@ -73,6 +74,10 @@ export const getRideDetails = async (req: Request, res: Response) => {
 
         if (ride.driver_photo) {
             ride.driver_photo = fixPhotoUrl(ride.driver_photo, req);
+        }
+
+        if (ride.passenger_photo) {
+            ride.passenger_photo = fixPhotoUrl(ride.passenger_photo, req);
         }
 
         res.json({ success: true, ride });
