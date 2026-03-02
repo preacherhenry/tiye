@@ -842,10 +842,10 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                             />
                         </Marker>
                     )}
-                    {pickupCoords && (
+                    {pickupCoords && rideStatus !== 'idle' && (
                         <Marker coordinate={pickupCoords} title="Pickup" pinColor="green" />
                     )}
-                    {destCoords && (
+                    {destCoords && rideStatus !== 'idle' && (
                         <Marker coordinate={destCoords} title="Destination" pinColor="red" />
                     )}
                 </MapView>
@@ -1170,7 +1170,11 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                 {/* ... Drawer Content ... */}
                 <View style={styles.drawerHeader}>
                     <View style={styles.profileAvatar}>
-                        <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'U'}</Text>
+                        {user?.profile_photo ? (
+                            <Image source={{ uri: user.profile_photo }} style={{ width: 60, height: 60, borderRadius: 30 }} />
+                        ) : (
+                            <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'U'}</Text>
+                        )}
                     </View>
                     <Text style={styles.drawerName}>{user?.name}</Text>
                     <Text style={styles.drawerPhone}>{user?.phone}</Text>
