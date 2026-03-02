@@ -159,6 +159,9 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                         const mapped = activeRide.status === 'pending' ? 'searching' : activeRide.status;
                         setRideStatus(mapped);
 
+                        // Sync manual destination flag
+                        setIsManualDestination(!!activeRide.is_manual_destination);
+
                         // Geocode restored locations
                         geocodeLocations(activeRide.pickup_location, activeRide.destination);
                     }
@@ -311,6 +314,11 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
 
                         return merged;
                     });
+
+                    // Sync manual destination flag in real-time
+                    if (updatedRide.is_manual_destination !== undefined) {
+                        setIsManualDestination(!!updatedRide.is_manual_destination);
+                    }
 
                     if (mappedStatus !== currentStatus) {
                         console.log('✅ Status changed:', currentStatus, '->', mappedStatus);
@@ -664,32 +672,47 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
         }
     };
 
-    // Real-time Driver Route (Driver -> Pickup)
+    // Real-time Driver Route (Driver -> Pickup or Driver -> Destination)
     useEffect(() => {
         const fetchDriverRoute = async () => {
-            if (rideStatus === 'accepted' && driverLoc && pickup) {
-                try {
-                    const pRes = await Location.geocodeAsync(pickup + ", Chirundu, Zambia");
-                    if (pRes.length > 0) {
-                        const p = pRes[0]; // Pickup
-                        const d = driverLoc; // Driver
+            const isToPickup = rideStatus === 'accepted';
+            const isToDest = rideStatus === 'in_progress';
 
-                        const url = `http://router.project-osrm.org/route/v1/driving/${d.longitude},${d.latitude};${p.longitude},${p.latitude}?overview=full&geometries=geojson`;
+            if ((isToPickup || isToDest) && driverLoc) {
+                try {
+                    const targetText = isToPickup ? pickup : destination;
+                    if (!targetText) return;
+
+                    // Prefer existing coordinates if we have them
+                    let target = isToPickup ? pickupCoords : destCoords;
+
+                    if (!target) {
+                        const res = await Location.geocodeAsync(targetText + ", Chirundu, Zambia");
+                        if (res.length > 0) target = res[0];
+                    }
+
+                    if (target) {
+                        const url = `http://router.project-osrm.org/route/v1/driving/${driverLoc.longitude},${driverLoc.latitude};${target.longitude},${target.latitude}?overview=full&geometries=geojson`;
                         const osrm = await fetch(url).then(r => r.json());
 
                         if (osrm.routes && osrm.routes.length > 0) {
-                            setRouteCoords(osrm.routes[0].geometry.coordinates.map(([lng, lat]: any) => ({ latitude: lat, longitude: lng })));
+                            setRouteCoords(osrm.routes[0].geometry.coordinates.map(([lng, lat]: any) => ({
+                                latitude: lat,
+                                longitude: lng
+                            })));
                         }
                     }
-                } catch (e) { console.log('Driver route failed', e); }
+                } catch (e) {
+                    console.log('Driver/Trip route failed', e);
+                }
             }
         };
 
-        // Fetch every 10s or when status changes
+        // Fetch Every 10s or when status/loc changes
         fetchDriverRoute();
         const interval = setInterval(fetchDriverRoute, 10000);
         return () => clearInterval(interval);
-    }, [rideStatus, driverLoc, pickup]);
+    }, [rideStatus, driverLoc, pickup, destination, pickupCoords, destCoords]);
 
     const handleApplyPromo = async () => {
         if (!promoInput.trim()) return;
