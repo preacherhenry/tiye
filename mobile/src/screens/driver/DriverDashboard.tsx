@@ -272,6 +272,9 @@ export const DriverDashboard = ({ navigation }: any) => {
     useEffect(() => {
         startLocationTracking();
 
+        // Initial check for active ride (restoration)
+        checkActiveRide();
+
         // Configure Audio Session for Background Playback
         const configureAudio = async () => {
             try {
@@ -337,9 +340,24 @@ export const DriverDashboard = ({ navigation }: any) => {
                             setActiveRide(null);
                             setRouteCoords([]);
                             Alert.alert("Ride Cancelled", "The passenger has cancelled this ride.");
-                        } else if (JSON.stringify(updatedRide) !== JSON.stringify(activeRide)) {
-                            console.log('[DRIVER APP] 🔄 Ride data updated:', updatedRide.status);
-                            setActiveRide(updatedRide);
+                        } else {
+                            // MERGE STRATEGY: Don't lose passenger details if they're in the current state
+                            // but missing in the generic 'list' response.
+                            setActiveRide((prev: any) => {
+                                if (!prev || prev.id !== updatedRide.id) return updatedRide;
+
+                                const merged = { ...prev, ...updatedRide };
+
+                                // Specific guard for passenger details
+                                if (!updatedRide.passenger_name && prev.passenger_name) {
+                                    merged.passenger_name = prev.passenger_name;
+                                }
+                                if (!updatedRide.passenger_phone && prev.passenger_phone) {
+                                    merged.passenger_phone = prev.passenger_phone;
+                                }
+
+                                return merged;
+                            });
                         }
                     }
                 } else {
