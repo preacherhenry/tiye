@@ -1176,6 +1176,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                 </View>
 
                 <View style={styles.drawerItems}>
+                    <MenuItem icon="person" label="Profile" onPress={() => { navigation.navigate('PersonalInformation'); setIsMenuOpen(false); }} />
                     <MenuItem icon="time" label="My Rides" onPress={() => { navigation.navigate('MyRides'); setIsMenuOpen(false); }} />
                     <MenuItem icon="wallet" label="Payment" onPress={() => { navigation.navigate('Payments'); setIsMenuOpen(false); }} />
                     <MenuItem icon="pricetag" label="Promotions" onPress={() => { navigation.navigate('Promotions'); setIsMenuOpen(false); }} />

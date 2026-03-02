@@ -7,7 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 
 export const PersonalInformationScreen = ({ navigation }: any) => {
-    const { user, login } = useAuth(); // We'll use a hack to update context by re-setting user data if needed, or better, fetch fresh profile
+    const { user, refreshUser } = useAuth();
     const [name, setName] = useState(user?.name || '');
     const [email, setEmail] = useState(user?.email || '');
     const [phone, setPhone] = useState(user?.phone || '');
@@ -56,6 +56,7 @@ export const PersonalInformationScreen = ({ navigation }: any) => {
 
             if (response.data.success) {
                 setProfileImage(response.data.photoUrl);
+                refreshUser(); // Sync globally
                 Alert.alert('Success', 'Profile photo updated!');
             } else {
                 Alert.alert('Upload Failed', response.data.message);
@@ -78,8 +79,7 @@ export const PersonalInformationScreen = ({ navigation }: any) => {
             const response = await api.put('/update-profile', { name, email, phone });
             if (response.data.success) {
                 Alert.alert('Success', 'Profile updated successfully');
-                // Optional: Force a refresh of the user context would be better here
-                // For now, we rely on the user seeing the update and the back button
+                refreshUser(); // Sync globally
             } else {
                 Alert.alert('Update Failed', response.data.message);
             }

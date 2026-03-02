@@ -58,7 +58,7 @@ const SettingsScreen = ({ navigation }: any) => {
                                 <Text style={styles.avatarInitial}>{user?.name?.[0] || 'U'}</Text>
                             </View>
                         )}
-                        <TouchableOpacity style={styles.editAvatarBtn}>
+                        <TouchableOpacity style={styles.editAvatarBtn} onPress={() => navigation.navigate('PersonalInformation')}>
                             <Ionicons name="camera" size={16} color="white" />
                         </TouchableOpacity>
                     </View>

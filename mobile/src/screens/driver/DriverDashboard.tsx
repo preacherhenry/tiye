@@ -915,7 +915,7 @@ const styles = StyleSheet.create({
     passengerName: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: Colors.text,
+        color: '#000',
     },
     passengerPhoneLabel: {
         fontSize: 13,
