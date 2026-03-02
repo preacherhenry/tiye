@@ -125,6 +125,14 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
     useEffect(() => {
         const restoreRide = async () => {
             if (!user?.id || user?.role !== 'passenger') return;
+
+            // GUARD: If we already have a rich rideInfo (with driver name), don't overwrite it
+            // with potentially incomplete data from the 'list' endpoint during a profile refresh.
+            if (rideInfo?.driver_name && ['accepted', 'arrived', 'in_progress'].includes(rideStatus)) {
+                console.log("⏭️ Skipping restoreRide: Active ride with driver already loaded.");
+                return;
+            }
+
             try {
                 const res = await api.get(`/passenger-rides/${user.id}`);
                 if (res.data.success) {
@@ -135,7 +143,15 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
 
                     if (activeRide) {
                         console.log("Restored Ride Status:", activeRide.status);
-                        setRideInfo(activeRide);
+
+                        // Merge logic for restore: don't lose driver details if already present
+                        setRideInfo((prev: any) => {
+                            if (prev?.id === activeRide.id) {
+                                return { ...prev, ...activeRide };
+                            }
+                            return activeRide;
+                        });
+
                         setPickup(activeRide.pickup_location);
                         setDestination(activeRide.destination);
                         setFare(activeRide.fare);
@@ -152,7 +168,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
             }
         };
         restoreRide();
-    }, [user]);
+    }, [user?.id]); // Dependency changed from [user] to [user?.id] to prevent refresh loops
 
     // 1b. Fetch Settings & Fare Config
     const fetchSettings = async () => {

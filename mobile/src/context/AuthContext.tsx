@@ -118,7 +118,16 @@ export const AuthProvider = ({ children }: any) => {
             if (res.data.success) {
                 const serverUser = res.data.user;
                 setUser(prev => {
-                    if (!prev) return serverUser; // Don't update if already null/logged out
+                    if (!prev) return serverUser;
+
+                    // Optimization: Only update if anything meaningful changed
+                    // (prevents triggering dependency arrays like [user] unnecessarily)
+                    const hasChanges = Object.keys(serverUser).some(key =>
+                        (serverUser as any)[key] !== (prev as any)[key]
+                    );
+
+                    if (!hasChanges) return prev;
+
                     const updated = { ...prev, ...serverUser };
                     SecureStore.setItemAsync('user', JSON.stringify(updated)).catch(() => { });
                     return updated;
