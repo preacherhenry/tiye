@@ -334,11 +334,12 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                         }
 
                         if (mappedStatus === 'completed') {
+                            setRideStatus('completed'); // Update status immediately to prevent re-triggering
                             Vibration.vibrate(500);
                             Alert.alert(
                                 "✅ Trip Completed",
                                 `Hope you enjoyed your ride with ${updatedRide.driver_name || 'Tiye'}!\n\n${(updatedRide.fare && updatedRide.fare > 0) ? `Total Fare: K${updatedRide.fare}` : 'Fare settled with driver'}`,
-                                [{ text: "Book Another", onPress: resetToIdle }]
+                                [{ text: "OK", onPress: resetToIdle }]
                             );
                             return; // Stop processing this poll
                         }
