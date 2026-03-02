@@ -42,6 +42,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
     const [fare, setFare] = useState(0);
     const [distance, setDistance] = useState(0);
     const [routeCoords, setRouteCoords] = useState<any[]>([]);
+    const [isManualDestination, setIsManualDestination] = useState(false);
     const [driverLoc, setDriverLoc] = useState<any>(null);
     const [pickupCoords, setPickupCoords] = useState<any>(null);
     const [destCoords, setDestCoords] = useState<any>(null);
@@ -273,6 +274,28 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
 
                     // Handle Status Change
                     const mappedStatus = updatedRide.status === 'pending' ? 'searching' : updatedRide.status;
+
+                    // CRITICAL: Update rideInfo FIRST with a merging strategy to prevent flickering
+                    setRideInfo((prev: any) => {
+                        if (!prev) return updatedRide;
+
+                        // Merge logic: prefer existing driver details if the new ones are missing
+                        // This prevents the "disappearing" effect.
+                        const merged = { ...prev, ...updatedRide };
+
+                        // If the status is still active but some driver details went missing in the response,
+                        // keep the old ones.
+                        if (['accepted', 'arrived', 'in_progress'].includes(mappedStatus)) {
+                            if (!updatedRide.driver_name && prev.driver_name) merged.driver_name = prev.driver_name;
+                            if (!updatedRide.driver_phone && prev.driver_phone) merged.driver_phone = prev.driver_phone;
+                            if (!updatedRide.car_model && prev.car_model) merged.car_model = prev.car_model;
+                            if (!updatedRide.plate_number && prev.plate_number) merged.plate_number = prev.plate_number;
+                            if (!updatedRide.driver_photo && prev.driver_photo) merged.driver_photo = prev.driver_photo;
+                        }
+
+                        return merged;
+                    });
+
                     if (mappedStatus !== currentStatus) {
                         console.log('✅ Status changed:', currentStatus, '->', mappedStatus);
 
@@ -290,19 +313,13 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                             Vibration.vibrate(500);
                             Alert.alert(
                                 "✅ Trip Completed",
-                                `Hope you enjoyed your ride with ${updatedRide.driver_name || 'Tiye'}!\n\nTotal Fare: K${updatedRide.fare}`,
+                                `Hope you enjoyed your ride with ${updatedRide.driver_name || 'Tiye'}!\n\n${(updatedRide.fare && updatedRide.fare > 0) ? `Total Fare: K${updatedRide.fare}` : 'Fare settled with driver'}`,
                                 [{ text: "Book Another", onPress: resetToIdle }]
                             );
                             return; // Stop processing this poll
                         }
 
                         setRideStatus(mappedStatus);
-                        setRideInfo(updatedRide);
-                    }
-
-                    // Handle Location/Driver Update even if status is same (e.g. driver moving or info populated)
-                    if (JSON.stringify(updatedRide) !== JSON.stringify(currentRide)) {
-                        setRideInfo(updatedRide);
                     }
 
                     if (updatedRide.current_lat && updatedRide.current_lng) {
@@ -338,6 +355,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
         setFare(0);
         setDestCoords(null);
         setAppliedPromo(null);
+        setIsManualDestination(false);
         // Reset camera to user
         if (location && mapRef.current) {
             mapRef.current.animateToRegion({
@@ -361,6 +379,15 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
         }
 
         setActiveInput(type);
+
+        // Reset coordinates and manual flag when the user starts typing a new location.
+        // This prevents old coordinates from persisting if they don't select a new place.
+        if (type === 'pickup') {
+            setPickupCoords(null);
+        } else {
+            setDestCoords(null);
+            setIsManualDestination(false);
+        }
 
         // Debounce search
         if (searchTimeout.current) clearTimeout(searchTimeout.current);
@@ -391,9 +418,9 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
             }
             setPickup(place.name);
             if (place.latitude && place.longitude) {
-                setPickupCoords({ latitude: place.latitude, longitude: place.longitude });
+                setPickupCoords({ latitude: Number(place.latitude), longitude: Number(place.longitude) });
             } else {
-                setPickupCoords(null); // Force geocode in handleRequestPreview
+                setPickupCoords(null); // Clear previous coords to force re-geocoding on search
             }
         } else if (activeInput === 'destination') {
             if (place.name === pickup) {
@@ -402,9 +429,15 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
             }
             setDestination(place.name);
             if (place.latitude && place.longitude) {
-                setDestCoords({ latitude: place.latitude, longitude: place.longitude });
+                // Known place with coords — clear any manual flag
+                setDestCoords({ latitude: Number(place.latitude), longitude: Number(place.longitude) });
+                setIsManualDestination(false);
+            } else if ((place as any).isManual) {
+                // User tapped "search anyway" — mark as manual, no coords
+                setDestCoords(null);
+                setIsManualDestination(true);
             } else {
-                setDestCoords(null); // Force geocode in handleRequestPreview
+                setDestCoords(null);
             }
         }
         setFilteredPlaces([]);
@@ -450,27 +483,45 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
             Alert.alert("Error", "Please enter pickup and destination");
             return;
         }
+
         setIsLoadingLoc(true);
         const freshSettings = await fetchSettings();
-        await calculateRoute(pickup, destination, pickupCoords, destCoords, freshSettings);
+
+        // If the user already explicitly selected a manual option from the list,
+        // we skip routing immediately.
+        if (isManualDestination) {
+            setFare(0);
+            setDistance(0);
+            setRideStatus('preview');
+            setRouteCoords([]);
+            setDestCoords(null);
+            setIsLoadingLoc(false);
+            return;
+        }
+
+        // If destCoords is null (user typed but didn't pick from list), 
+        // calculateRoute will attempt to geocode the raw text.
+        const success = await calculateRoute(pickup, destination, pickupCoords, destCoords, freshSettings);
+        // Fallback: if routing completely failed (no coords resolved), allow manual booking
+        if (!success) {
+            setIsManualDestination(true);
+            setFare(0);
+            setDistance(0);
+            setDestCoords(null);
+            setRideStatus('preview');
+        }
         setIsLoadingLoc(false);
     };
 
-    const calculateRoute = async (pText: string, dText: string, pC: any, dC: any, currentSettings?: any) => {
+    // Returns true if routing succeeded, false if coords could not be resolved (caller handles fallback)
+    const calculateRoute = async (pText: string, dText: string, pC: any, dC: any, currentSettings?: any): Promise<boolean> => {
         const s = currentSettings || settings;
         try {
-            // Local lookup helper
-            const findLocalCoords = (name: string) => {
-                const all = [...CHIRUNDU_PLACES, ...dynamicPlaces];
-                const match = all.find(p => p.name.toLowerCase() === name.toLowerCase());
-                return (match?.latitude && match?.longitude) ? { latitude: match.latitude, longitude: match.longitude } : null;
-            };
-
             // 1. Top Priority: Exact coords from autocomplete selection (if user tapped a suggestion)
             let p = pC;
             let d = dC;
 
-            // 2. Next Priority: Google Maps / Expo Geocoder (if no selection or to try formal address)
+            // 2. Next Priority: Google Maps / Expo Geocoder (Primary source for name-to-coord resolution)
             if (!p) {
                 const pRes = await Location.geocodeAsync(pText + ", Chirundu, Zambia");
                 if (pRes.length > 0) p = pRes[0];
@@ -478,13 +529,43 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
 
             if (!d) {
                 const dRes = await Location.geocodeAsync(dText + ", Chirundu, Zambia");
-                if (dRes.length > 0) d = dRes[0];
+                if (dRes.length > 0) {
+                    const candidate = dRes[0];
+
+                    // Smart Snap Detection:
+                    // Vague strings in Chirundu often snap to the town center (UCZ Church).
+                    // We catch this by comparing the result to a generic "Chirundu, Zambia" geocode.
+                    try {
+                        const centerRes = await Location.geocodeAsync("Chirundu, Zambia");
+                        if (centerRes.length > 0) {
+                            const center = centerRes[0];
+                            const distFromCenter = getDistanceBetween(candidate.latitude, candidate.longitude, center.latitude, center.longitude);
+
+                            // If it snaps to within 50m of the town center, but the user didn't type "Chirundu"
+                            // or "Town Center", it's likely a geocoding "guess".
+                            const isGenericQuery = dText.toLowerCase().includes("chirundu") || dText.toLowerCase().includes("town center");
+                            if (distFromCenter < 0.05 && !isGenericQuery) {
+                                console.log(`📍 [SMART SNAP] Destination "${dText}" snapped to town center. Forcing Manual.`);
+                                return false; // Triggers manual fallback in caller
+                            }
+                        }
+                    } catch (err) {
+                        console.log("Snap detection failed, proceeding with caution", err);
+                    }
+
+                    d = candidate;
+                }
             }
 
-            // 3. Final Fallback: Local Landmark Database (Internal + Dynamic Admin Places)
-            // (Only runs if Google failed to resolve the name)
-            if (!p) p = findLocalCoords(pText);
-            if (!d) d = findLocalCoords(dText);
+            // Fallback for manual text geocoding if coords still null (mostly redundant now but safe)
+            if (!p && pText) {
+                const pRes = await Location.geocodeAsync(pText);
+                if (pRes.length > 0) p = pRes[0];
+            }
+            if (!d && dText) {
+                const dRes = await Location.geocodeAsync(dText);
+                if (dRes.length > 0) d = dRes[0];
+            }
 
             if (p && d) {
 
@@ -542,6 +623,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                     }
 
                     setFare(finalFare);
+                    setIsManualDestination(false);
 
                     if (rideStatus === 'idle' || rideStatus === 'searching') {
                         setRideStatus('preview');
@@ -552,12 +634,17 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                             { latitude: d.latitude, longitude: d.longitude }
                         ], { edgePadding: { top: 50, right: 50, bottom: 300, left: 50 } });
                     }
+                    return true;
                 }
+                // OSRM returned no routes — treat as unresolvable
+                return false;
             } else {
-                Alert.alert("Error", "Could not find locations.");
+                // Coords could not be resolved — signal manual fallback
+                return false;
             }
         } catch (e) {
-            console.log("Routing failed", e); // Silent fail preferred
+            console.log("Routing failed", e);
+            return false;
         }
     };
 
@@ -627,13 +714,15 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                 passenger_id: user?.id,
                 pickup,
                 destination,
-                fare: calculateDiscountedFare(),
-                distance,
+                fare: isManualDestination ? 0 : calculateDiscountedFare(),
+                distance: isManualDestination ? 0 : distance,
                 pickup_lat: pickupCoords?.latitude,
                 pickup_lng: pickupCoords?.longitude,
-                dropoff_lat: destCoords?.latitude,
-                dropoff_lng: destCoords?.longitude,
-                promoId: appliedPromo?.id
+                // Do not send dest coords for manual trips — driver will determine on arrival
+                dropoff_lat: isManualDestination ? null : destCoords?.latitude,
+                dropoff_lng: isManualDestination ? null : destCoords?.longitude,
+                promoId: isManualDestination ? null : appliedPromo?.id,
+                is_manual_destination: isManualDestination
             });
             if (res.data.success) {
                 setRideId(res.data.rideId);
@@ -697,7 +786,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                         longitudeDelta: ZOOM_LEVEL,
                     }}
                 >
-                    {routeCoords.length > 0 && (
+                    {routeCoords.length > 0 && !isManualDestination && (
                         <Polyline coordinates={routeCoords} strokeWidth={4} strokeColor={Colors.primary} />
                     )}
                     {driverLoc && ['accepted', 'arrived', 'in_progress'].includes(rideStatus) && (
@@ -727,7 +816,6 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                 <TouchableOpacity onPress={toggleMenu} style={styles.menuBtn}>
                     <Ionicons name="menu" size={24} color="black" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Taxi App</Text>
             </View>
 
             {/* Main Content Area */}
@@ -765,7 +853,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                                                 <Ionicons name="location-sharp" size={18} color={Colors.primary} />
                                                 <View style={{ marginLeft: 10 }}>
                                                     <Text style={styles.placeName}>{place.name}</Text>
-                                                    <Text style={styles.placeCategory}>({place.category}){place.area ? ` • ${place.area}` : ''}</Text>
+                                                    {place.description && <Text style={styles.placeCategory}>({place.description})</Text>}
                                                 </View>
                                             </TouchableOpacity>
                                         ))
@@ -773,7 +861,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                                         pickup.trim().length > 0 && (
                                             <TouchableOpacity
                                                 style={styles.noResultItem}
-                                                onPress={() => selectPlace({ name: pickup, category: 'Manual' } as any)}
+                                                onPress={() => selectPlace({ name: pickup, description: 'Manual' } as any)}
                                             >
                                                 <Ionicons name="search-outline" size={20} color={Colors.gray} />
                                                 <View style={{ marginLeft: 10 }}>
@@ -814,7 +902,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                                                 <Ionicons name="location-sharp" size={18} color={Colors.primary} />
                                                 <View style={{ marginLeft: 10 }}>
                                                     <Text style={styles.placeName}>{place.name}</Text>
-                                                    <Text style={styles.placeCategory}>({place.category}){place.area ? ` • ${place.area}` : ''}</Text>
+                                                    {place.description && <Text style={styles.placeCategory}>({place.description})</Text>}
                                                 </View>
                                             </TouchableOpacity>
                                         ))
@@ -822,12 +910,12 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                                         destination.trim().length > 0 && (
                                             <TouchableOpacity
                                                 style={styles.noResultItem}
-                                                onPress={() => selectPlace({ name: destination, category: 'Manual' } as any)}
+                                                onPress={() => selectPlace({ name: destination, description: 'Custom destination', isManual: true } as any)}
                                             >
                                                 <Ionicons name="search-outline" size={20} color={Colors.gray} />
                                                 <View style={{ marginLeft: 10 }}>
                                                     <Text style={styles.noResultText}>No saved location found</Text>
-                                                    <Text style={[styles.placeCategory, { color: Colors.primary, marginTop: 2 }]}>Tap to search for "{destination}" anyway</Text>
+                                                    <Text style={[styles.placeCategory, { color: Colors.primary, marginTop: 2 }]}>Book with "{destination}" as custom destination</Text>
                                                 </View>
                                             </TouchableOpacity>
                                         )
@@ -842,131 +930,171 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
 
                 {/* 2. PREVIEW */}
                 {rideStatus === 'preview' && (
-                    <View style={styles.previewBox}>
-                        <Text style={styles.fareTitle}>
-                            Trip Fare: <Text style={{ textDecorationLine: appliedPromo ? 'line-through' : 'none', color: appliedPromo ? Colors.gray : Colors.primary }}>K{fare}</Text>
-                            {appliedPromo && <Text style={{ color: Colors.success }}> K{calculateDiscountedFare()}</Text>}
-                        </Text>
-                        <Text style={styles.distText}>{distance} km • ~{Math.ceil(distance * 3)} mins</Text>
-
-                        {showPromoInput ? (
-                            <View style={styles.promoInputRow}>
-                                <TextInput
-                                    placeholder="Enter code"
-                                    style={styles.promoInput}
-                                    value={promoInput}
-                                    onChangeText={setPromoInput}
-                                    autoCapitalize="characters"
-                                />
-                                <TouchableOpacity style={styles.promoApplyBtn} onPress={handleApplyPromo} disabled={isApplyingPromo}>
-                                    {isApplyingPromo ? <ActivityIndicator size="small" color="white" /> : <Text style={styles.promoBtnText}>Apply</Text>}
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => setShowPromoInput(false)} style={{ marginLeft: 10 }}>
-                                    <Ionicons name="close-circle" size={24} color={Colors.gray} />
-                                </TouchableOpacity>
+                    <>
+                        <View style={styles.previewBox}>
+                            {/* Trip summary: pickup and destination */}
+                            <View style={{ marginBottom: 15, width: '100%' }}>
+                                <View style={[styles.tripRow, { marginBottom: 8 }]}>
+                                    <Ionicons name="location" size={20} color={Colors.success} />
+                                    <Text style={[styles.tripText, { flex: 1, marginLeft: 10, color: 'white', fontWeight: '600' }]} numberOfLines={2}>
+                                        {pickup}
+                                    </Text>
+                                </View>
+                                <View style={styles.tripRow}>
+                                    <Ionicons name="flag" size={20} color={Colors.danger} />
+                                    <Text style={[styles.tripText, { flex: 1, marginLeft: 10, color: 'white', fontWeight: '600' }]} numberOfLines={2}>
+                                        {destination}
+                                    </Text>
+                                </View>
                             </View>
-                        ) : (
-                            !appliedPromo && hasValidPromos && (
-                                <TouchableOpacity style={styles.promoTrigger} onPress={() => setShowPromoInput(true)}>
-                                    <Ionicons name="pricetag" size={16} color={Colors.primary} />
-                                    <Text style={styles.promoTriggerText}>Use Promocode</Text>
-                                </TouchableOpacity>
-                            )
-                        )}
 
-                        {appliedPromo && (
-                            <View style={styles.appliedPromoTag}>
-                                <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
-                                <Text style={styles.appliedPromoText}>Promo Applied: {appliedPromo.code}</Text>
-                                <TouchableOpacity onPress={() => setAppliedPromo(null)}>
-                                    <Text style={{ color: 'red', marginLeft: 10, fontSize: 12 }}>Remove</Text>
-                                </TouchableOpacity>
+                            {isManualDestination ? (
+                                /* Manual / custom destination — no price available */
+                                <View style={styles.manualFareBox}>
+                                    <Ionicons name="information-circle-outline" size={20} color="#F59E0B" />
+                                    <View style={{ marginLeft: 8, flex: 1 }}>
+                                        <Text style={styles.manualFareTitle}>DESTINATION NOT FOUND ON MAP</Text>
+                                        <Text style={styles.manualFareSubtitle}>Proceed as price will be processed during the trip and will be displayed after the trip is completed. thank you.</Text>
+                                    </View>
+                                </View>
+                            ) : (
+                                /* Normal trip — show calculated fare */
+                                <>
+                                    <Text style={styles.fareTitle}>
+                                        Trip Fare: <Text style={{ textDecorationLine: appliedPromo ? 'line-through' : 'none', color: appliedPromo ? Colors.gray : Colors.primary }}>K{fare}</Text>
+                                        {appliedPromo && <Text style={{ color: Colors.success }}> K{calculateDiscountedFare()}</Text>}
+                                    </Text>
+                                    <Text style={styles.distText}>{distance} km • ~{Math.ceil(Number(distance) * 3)} mins</Text>
+
+                                    {showPromoInput ? (
+                                        <View style={styles.promoInputRow}>
+                                            <TextInput
+                                                placeholder="Enter code"
+                                                style={styles.promoInput}
+                                                value={promoInput}
+                                                onChangeText={setPromoInput}
+                                                autoCapitalize="characters"
+                                            />
+                                            <TouchableOpacity style={styles.promoApplyBtn} onPress={handleApplyPromo} disabled={isApplyingPromo}>
+                                                {isApplyingPromo ? <ActivityIndicator size="small" color="white" /> : <Text style={styles.promoBtnText}>Apply</Text>}
+                                            </TouchableOpacity>
+                                            <TouchableOpacity onPress={() => setShowPromoInput(false)} style={{ marginLeft: 10 }}>
+                                                <Ionicons name="close-circle" size={24} color={Colors.gray} />
+                                            </TouchableOpacity>
+                                        </View>
+                                    ) : (
+                                        !appliedPromo && hasValidPromos && (
+                                            <TouchableOpacity style={styles.promoTrigger} onPress={() => setShowPromoInput(true)}>
+                                                <Ionicons name="pricetag" size={16} color={Colors.primary} />
+                                                <Text style={styles.promoTriggerText}>Use Promocode</Text>
+                                            </TouchableOpacity>
+                                        )
+                                    )}
+
+                                    {appliedPromo && (
+                                        <View style={styles.appliedPromoTag}>
+                                            <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+                                            <Text style={styles.appliedPromoText}>Promo Applied: {appliedPromo.code}</Text>
+                                            <TouchableOpacity onPress={() => setAppliedPromo(null)}>
+                                                <Text style={{ color: 'red', marginLeft: 10, fontSize: 12 }}>Remove</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    )}
+                                </>
+                            )}
+                        </View>
+
+                        <View style={styles.actionIsland}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                <View style={{ flex: 1, marginRight: 10 }}>
+                                    <Button title="Cancel" variant="danger" onPress={resetToIdle} />
+                                </View>
+                                <View style={{ flex: 1.5 }}>
+                                    <Button title="ORDER NOW" variant="success" onPress={confirmRequest} />
+                                </View>
                             </View>
-                        )}
-
-                        <Button title="ORDER NOW" variant="success" onPress={confirmRequest} />
-                        <Button title="Cancel" variant="danger" onPress={resetToIdle} />
-                    </View>
+                        </View>
+                    </>
                 )}
 
                 {/* 3. ACTIVE RIDE STATUS PANEL */}
                 {!['idle', 'preview', 'completed', 'cancelled'].includes(rideStatus) && (
-                    <View style={styles.rideIsland}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                            <View>
-                                <Text style={styles.tripLabel}>Trip Details:</Text>
-                                <View style={styles.tripRow}><Ionicons name="location-outline" size={16} color={Colors.primary} /><Text style={styles.tripText} numberOfLines={1}>{pickup || rideInfo?.pickup_location || 'Trip in Progress'}</Text></View>
-                                <View style={styles.tripRow}><Ionicons name="flag-outline" size={16} color="red" /><Text style={styles.tripText} numberOfLines={1}>{destination || rideInfo?.destination || '...'}</Text></View>
+                    <>
+                        <View style={styles.rideIsland}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                                <View>
+                                    <Text style={styles.tripLabel}>Trip Details:</Text>
+                                    <View style={styles.tripRow}><Ionicons name="location-outline" size={16} color={Colors.primary} /><Text style={styles.tripText} numberOfLines={1}>{pickup || rideInfo?.pickup_location || 'Trip in Progress'}</Text></View>
+                                    <View style={styles.tripRow}><Ionicons name="flag-outline" size={16} color="red" /><Text style={styles.tripText} numberOfLines={1}>{destination || rideInfo?.destination || '...'}</Text></View>
+                                </View>
                             </View>
 
-                            {/* Cancel Button - Original Position */}
-                            {rideStatus !== 'completed' && (
-                                <TouchableOpacity onPress={handleCancelRide} style={styles.cancelLink}>
-                                    <Text style={{ color: 'red', fontWeight: 'bold' }}>Cancel</Text>
-                                </TouchableOpacity>
+                            {!!(rideInfo?.fare && Number(rideInfo.fare) > 0) && (
+                                <View style={styles.fareRow}>
+                                    <Text style={{ fontWeight: 'bold', color: 'white' }}>K{rideInfo.fare}</Text>
+                                    <Text style={{ color: Colors.gray }}>{rideInfo.distance} km</Text>
+                                </View>
+                            )}
+                            <View style={{ height: 1, backgroundColor: '#333', marginVertical: 10 }} />
+
+                            {rideStatus === 'searching' ? (
+                                <View style={{ alignItems: 'center', paddingVertical: 10 }}>
+                                    <ActivityIndicator size="large" color={Colors.primary} />
+                                    <Text style={styles.islandTitle}>Searching for a driver...</Text>
+                                </View>
+                            ) : (
+                                <View>
+                                    <View style={styles.statusRow}>
+                                        <View style={styles.statusBadge}>
+                                            <Text style={styles.statusBadgeText}>{(rideStatus || 'ACTIVE').toUpperCase().replace('_', ' ')}</Text>
+                                        </View>
+                                        <Text style={styles.timeText}>
+                                            {rideStatus === 'in_progress' ? 'Trip in Progress' :
+                                                rideStatus === 'arrived' ? 'Driver Arrived' : 'Arriving Soon'}
+                                        </Text>
+                                    </View>
+
+                                    <View style={styles.driverRow}>
+                                        {/* Driver Photo & Rating */}
+                                        <View>
+                                            {rideInfo?.driver_photo ? (
+                                                <Image source={{ uri: rideInfo.driver_photo }} style={styles.driverAvatar} />
+                                            ) : (
+                                                <View style={styles.avatarPlaceholder}><Text style={{ fontSize: 20 }}>👤</Text></View>
+                                            )}
+                                            <Text style={styles.rating}>⭐ {rideInfo?.driver_rating || '4.9'}</Text>
+                                        </View>
+
+                                        <View style={{ flex: 1, marginLeft: 10 }}>
+                                            <Text style={[styles.driverName, { color: 'white' }]}>{rideInfo?.driver_name || "Unknown Driver"}</Text>
+                                            <Text style={{ fontSize: 12, color: '#999', marginBottom: 2 }}>
+                                                {rideInfo?.driver_phone || "No Phone Number"}
+                                            </Text>
+                                            <Text style={styles.carInfo}>
+                                                {rideInfo?.car_color} {rideInfo?.car_model}
+                                            </Text>
+                                            <View style={styles.plateBadge}>
+                                                <Text style={styles.plateText}>{rideInfo?.plate_number || 'TR 123'}</Text>
+                                            </View>
+                                        </View>
+
+                                        <TouchableOpacity style={styles.callBtn} onPress={() => {
+                                            if (rideInfo?.driver_phone) Linking.openURL(`tel:${rideInfo.driver_phone}`);
+                                            else Alert.alert("No Phone", "Driver phone number not available.");
+                                        }}>
+                                            <Ionicons name="call" size={20} color="white" />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
                             )}
                         </View>
 
-                        {(rideInfo?.fare) && (
-                            <View style={styles.fareRow}>
-                                <Text style={{ fontWeight: 'bold' }}>K{rideInfo.fare}</Text>
-                                <Text style={{ color: Colors.gray }}>{rideInfo.distance} km</Text>
-                            </View>
-                        )}
-                        <View style={{ height: 1, backgroundColor: '#eee', marginVertical: 10 }} />
-
-                        {rideStatus === 'searching' ? (
-                            <View style={{ alignItems: 'center', paddingVertical: 10 }}>
-                                <ActivityIndicator size="large" color={Colors.primary} />
-                                <Text style={styles.islandTitle}>Searching for a driver...</Text>
-                            </View>
-                        ) : (
-                            <View>
-                                <View style={styles.statusRow}>
-                                    <View style={styles.statusBadge}>
-                                        <Text style={styles.statusBadgeText}>{(rideStatus || 'ACTIVE').toUpperCase().replace('_', ' ')}</Text>
-                                    </View>
-                                    <Text style={styles.timeText}>
-                                        {rideStatus === 'in_progress' ? 'Trip in Progress' :
-                                            rideStatus === 'arrived' ? 'Driver Arrived' : 'Arriving Soon'}
-                                    </Text>
-                                </View>
-
-                                <View style={styles.driverRow}>
-                                    {/* Driver Photo & Rating */}
-                                    <View>
-                                        {rideInfo?.driver_photo ? (
-                                            <Image source={{ uri: rideInfo.driver_photo }} style={styles.driverAvatar} />
-                                        ) : (
-                                            <View style={styles.avatarPlaceholder}><Text style={{ fontSize: 20 }}>👤</Text></View>
-                                        )}
-                                        <Text style={styles.rating}>⭐ {rideInfo?.driver_rating || '4.9'}</Text>
-                                    </View>
-
-                                    <View style={{ flex: 1, marginLeft: 10 }}>
-                                        <Text style={styles.driverName}>{rideInfo?.driver_name || "Unknown Driver"}</Text>
-                                        <Text style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>
-                                            {rideInfo?.driver_phone || "No Phone Number"}
-                                        </Text>
-                                        <Text style={styles.carInfo}>
-                                            {rideInfo?.car_color} {rideInfo?.car_model}
-                                        </Text>
-                                        <View style={styles.plateBadge}>
-                                            <Text style={styles.plateText}>{rideInfo?.plate_number || 'TR 123'}</Text>
-                                        </View>
-                                    </View>
-
-                                    <TouchableOpacity style={styles.callBtn} onPress={() => {
-                                        if (rideInfo?.driver_phone) Linking.openURL(`tel:${rideInfo.driver_phone}`);
-                                        else Alert.alert("No Phone", "Driver phone number not available.");
-                                    }}>
-                                        <Ionicons name="call" size={20} color="white" />
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                        )}
-
-                    </View>
+                        <View style={styles.actionIsland}>
+                            <TouchableOpacity onPress={handleCancelRide} style={{ backgroundColor: '#FF4444' + '11', borderColor: Colors.danger, borderWidth: 1, padding: 12, borderRadius: 12, alignItems: 'center' }}>
+                                <Text style={{ color: Colors.danger, fontWeight: 'bold' }}>Cancel Ride</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </>
                 )}
 
                 {/* 4. COMPLETED STATE */}
@@ -974,7 +1102,11 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                     <View style={styles.completedBox}>
                         <Ionicons name="checkmark-circle" size={60} color="green" />
                         <Text style={styles.completedTitle}>Ride Completed!</Text>
-                        <Text style={{ color: Colors.gray, marginBottom: 20 }}>Paid: K{rideInfo?.fare || fare}</Text>
+                        {(rideInfo?.fare && Number(rideInfo.fare) > 0) ? (
+                            <Text style={{ color: Colors.gray, marginBottom: 20 }}>Total Fare: K{rideInfo.fare}</Text>
+                        ) : (
+                            <Text style={{ color: Colors.gray, marginBottom: 20 }}>Fare settled with driver</Text>
+                        )}
                         <Button title="Book Another Ride" onPress={resetToIdle} />
                     </View>
                 )}
@@ -1044,23 +1176,30 @@ const styles = StyleSheet.create({
         borderColor: '#333'
     },
     previewBox: {
-        backgroundColor: Colors.surface, padding: 20, borderRadius: 15, elevation: 10, alignItems: 'center',
-        marginHorizontal: 20, marginBottom: 10
+        backgroundColor: Colors.surface, padding: 20, borderRadius: 20, elevation: 15, alignItems: 'center',
+        marginHorizontal: 15, marginBottom: 15
     },
-    fareTitle: { fontSize: 24, fontWeight: 'bold', color: Colors.primary, marginBottom: 5, marginTop: 25 },
+    actionIsland: {
+        backgroundColor: Colors.surface, padding: 15, borderRadius: 20, elevation: 15,
+        marginHorizontal: 15, marginBottom: 10
+    },
+    rideIsland: {
+        backgroundColor: Colors.surface, padding: 20, borderRadius: 25, elevation: 20,
+        marginHorizontal: 15, marginBottom: 15
+    },
+    fareTitle: { fontSize: 24, fontWeight: 'bold', color: Colors.primary, marginBottom: 5, marginTop: 20 },
     distText: { fontSize: 16, color: Colors.gray, marginBottom: 15 },
 
-    rideIsland: {
+    rideIslandActive: {
         backgroundColor: Colors.surface, padding: 20, borderTopLeftRadius: 25, borderTopRightRadius: 25, elevation: 20,
-        marginBottom: -20
     },
-    tripLabel: { fontWeight: 'bold', color: Colors.gray, fontSize: 12, marginBottom: 5 },
+    tripLabel: { fontWeight: 'bold', color: '#999', fontSize: 12, marginBottom: 5 },
     tripRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
     tripText: { marginLeft: 10, fontSize: 14, fontWeight: '500', color: Colors.text },
     fareRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 5 },
     cancelLink: { padding: 5 },
 
-    islandTitle: { fontSize: 18, fontWeight: 'bold', marginTop: 10 },
+    islandTitle: { fontSize: 18, fontWeight: 'bold', marginTop: 10, color: 'white' },
     statusRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 },
     statusBadge: { backgroundColor: Colors.primary, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 5 },
     statusBadgeText: { color: 'white', fontWeight: 'bold', fontSize: 12 },
@@ -1106,6 +1245,15 @@ const styles = StyleSheet.create({
     promoBtnText: { color: 'white', fontWeight: 'bold' },
     appliedPromoTag: { position: 'absolute', top: 15, right: 15, flexDirection: 'row', alignItems: 'center', backgroundColor: '#4CAF50' + '11', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, zIndex: 10 },
     appliedPromoText: { color: '#4CAF50', fontWeight: 'bold', marginLeft: 5, fontSize: 12 },
+
+    // Manual Destination Styles
+    manualFareBox: {
+        flexDirection: 'row', alignItems: 'flex-start',
+        backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#F59E0B',
+        borderRadius: 10, padding: 12, marginBottom: 16, width: '100%'
+    },
+    manualFareTitle: { fontSize: 15, fontWeight: 'bold', color: '#92400E', marginBottom: 3 },
+    manualFareSubtitle: { fontSize: 12, color: '#78350F', lineHeight: 17 },
 
     // Autocomplete Styles
     autocompleteDropdown: {

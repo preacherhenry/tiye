@@ -102,19 +102,27 @@ export const AuthProvider = ({ children }: any) => {
     };
 
     const logout = async () => {
+        console.log('🚪 Logging out...');
         setToken(null);
         setUser(null);
+        delete api.defaults.headers.common['Authorization'];
         await SecureStore.deleteItemAsync('token');
         await SecureStore.deleteItemAsync('user');
     };
 
     const refreshUser = async () => {
+        if (!token) return; // Don't refresh if no token (logged out)
+
         try {
             const res = await api.get('/profile');
             if (res.data.success) {
-                const updatedUser = { ...user, ...res.data.user };
-                setUser(updatedUser);
-                await SecureStore.setItemAsync('user', JSON.stringify(updatedUser));
+                const serverUser = res.data.user;
+                setUser(prev => {
+                    if (!prev) return serverUser; // Don't update if already null/logged out
+                    const updated = { ...prev, ...serverUser };
+                    SecureStore.setItemAsync('user', JSON.stringify(updated)).catch(() => { });
+                    return updated;
+                });
             }
         } catch (error: any) {
             console.error('Failed to refresh user:', error);
@@ -128,15 +136,13 @@ export const AuthProvider = ({ children }: any) => {
         setUnauthorizedHandler(logout);
     }, []);
 
-    // Global Heartbeat to detect suspension/token issues immediately
+    // Global Heartbeat to detect suspension/token issues
     useEffect(() => {
         let interval: any;
         if (token && user) {
             interval = setInterval(() => {
-                refreshUser().catch((err) => {
-                    console.log('💓 Heartbeat refresh failed:', err.message);
-                });
-            }, 5000); // 5 seconds for "immediate" status updates
+                refreshUser();
+            }, 15000); // 15 seconds (optimized for quota)
         }
         return () => clearInterval(interval);
     }, [token, !!user]);

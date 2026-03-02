@@ -11,12 +11,13 @@ import { Audio } from 'expo-av';
 // @ts-ignore
 import * as FileSystem from 'expo-file-system/legacy';
 
+import { Ionicons } from '@expo/vector-icons';
 import { SubscriptionMonitor } from './components/SubscriptionMonitor';
 
 const { width, height } = Dimensions.get('window');
 
 // Sidebar Component
-const Sidebar = ({ isOpen, onClose, user, onUploadPhoto, onLogout, navigation }: any) => {
+const Sidebar = React.memo(({ isOpen, onClose, user, onUploadPhoto, onLogout, navigation }: any) => {
     const slideAnim = useRef(new Animated.Value(-width * 0.75)).current;
 
     useEffect(() => {
@@ -68,7 +69,7 @@ const Sidebar = ({ isOpen, onClose, user, onUploadPhoto, onLogout, navigation }:
             </Animated.View>
         </>
     );
-};
+});
 
 export const DriverDashboard = ({ navigation }: any) => {
     const { user, login, logout } = useAuth();
@@ -336,8 +337,8 @@ export const DriverDashboard = ({ navigation }: any) => {
                             setActiveRide(null);
                             setRouteCoords([]);
                             Alert.alert("Ride Cancelled", "The passenger has cancelled this ride.");
-                        } else if (updatedRide.status !== activeRide.status) {
-                            console.log('[DRIVER APP] 🔄 Status changed from', activeRide.status, 'to', updatedRide.status);
+                        } else if (JSON.stringify(updatedRide) !== JSON.stringify(activeRide)) {
+                            console.log('[DRIVER APP] 🔄 Ride data updated:', updatedRide.status);
                             setActiveRide(updatedRide);
                         }
                     }
@@ -346,7 +347,10 @@ export const DriverDashboard = ({ navigation }: any) => {
                         ['accepted', 'arrived', 'in_progress'].includes(r.status)
                     );
                     if (currentActive) {
-                        setActiveRide(currentActive);
+                        const rideRes = await api.get(`/ride/${currentActive.id}`);
+                        if (rideRes.data.success) {
+                            setActiveRide(rideRes.data.ride);
+                        }
                     }
                 }
             }
@@ -412,9 +416,14 @@ export const DriverDashboard = ({ navigation }: any) => {
             const res = await api.post('/accept-ride', { ride_id: rideId, driver_id: user.id });
             console.log('[DRIVER APP] 📨 Accept response:', res.data);
             if (res.data.success) {
-                const newActiveRide = res.data.ride || { id: rideId, ...pendingRides.find(r => r.id === rideId) };
-                console.log('[DRIVER APP] ✅ Setting activeRide state:', newActiveRide);
-                setActiveRide(newActiveRide);
+                // Fetch full ride details to get passenger info immediately after accept
+                const rideRes = await api.get(`/ride/${rideId}`);
+                if (rideRes.data.success) {
+                    setActiveRide(rideRes.data.ride);
+                } else {
+                    const newActiveRide = res.data.ride || { id: rideId, ...pendingRides.find(r => r.id === rideId) };
+                    setActiveRide(newActiveRide);
+                }
                 setPendingRides([]);
             } else {
                 console.log('[DRIVER APP] ❌ Accept failed:', res.data.message);
@@ -423,6 +432,18 @@ export const DriverDashboard = ({ navigation }: any) => {
         } catch (error) {
             console.error('[DRIVER APP] ❌ Network error accepting ride:', error);
             Alert.alert('Error', 'Failed to accept ride');
+        }
+    };
+
+    const handleRejectRide = async (rideId: string) => {
+        try {
+            const res = await api.post('/reject-ride', { ride_id: rideId });
+            if (res.data.success) {
+                setPendingRides(prev => prev.filter(r => r.id !== rideId));
+                fetchPendingRides();
+            }
+        } catch (error) {
+            console.error('Error rejecting ride:', error);
         }
     };
 
@@ -510,22 +531,36 @@ export const DriverDashboard = ({ navigation }: any) => {
     const geocodeTrip = async () => {
         try {
             const pRes = await Location.geocodeAsync(activeRide.pickup_location + ", Chirundu, Zambia");
-            const dRes = await Location.geocodeAsync(activeRide.destination + ", Chirundu, Zambia");
             if (pRes.length > 0) setPickupCoords(pRes[0]);
-            if (dRes.length > 0) setDestinationCoords(dRes[0]);
+
+            // Only geocode destination if it's not a manual/custom location
+            if (!activeRide.is_manual_destination) {
+                const dRes = await Location.geocodeAsync(activeRide.destination + ", Chirundu, Zambia");
+                if (dRes.length > 0) setDestinationCoords(dRes[0]);
+            } else {
+                setDestinationCoords(null);
+            }
         } catch (e) {
             console.log("Geocoding trip failed", e);
         }
     };
 
     useEffect(() => {
-        if (activeRide && location && pickupCoords && destinationCoords) {
+        if (activeRide && location && pickupCoords) {
             const isToPickup = activeRide.status === 'accepted' || activeRide.status === 'arrived';
-            const target = isToPickup ? pickupCoords : destinationCoords;
-            calculateDriverRoute(target);
+
+            if (isToPickup) {
+                calculateDriverRoute(pickupCoords);
+            } else if (destinationCoords && !activeRide.is_manual_destination) {
+                calculateDriverRoute(destinationCoords);
+            } else {
+                setRouteCoords([]); // No route for manual destinations or if coords missing
+            }
 
             // Auto zoom to fit trip
-            const coords = [location.coords, pickupCoords, destinationCoords];
+            const coords = [location.coords, pickupCoords];
+            if (destinationCoords) coords.push(destinationCoords);
+
             mapRef.current?.fitToCoordinates(coords, {
                 edgePadding: { top: 100, right: 100, bottom: 300, left: 100 },
                 animated: true
@@ -595,7 +630,11 @@ export const DriverDashboard = ({ navigation }: any) => {
             >
                 {/* Driver Route */}
                 {activeRide && routeCoords.length > 0 && (
-                    <Polyline coordinates={routeCoords} strokeColor={Colors.primary} strokeWidth={4} />
+                    <Polyline
+                        coordinates={routeCoords}
+                        strokeColor={Colors.primary}
+                        strokeWidth={4}
+                    />
                 )}
 
                 {/* Pickup Marker */}
@@ -619,8 +658,12 @@ export const DriverDashboard = ({ navigation }: any) => {
                 )}
             </MapView>
 
-            <TouchableOpacity style={styles.menuButton} onPress={() => setSidebarOpen(true)}>
-                <Text style={{ fontSize: 24 }}>☰</Text>
+            <TouchableOpacity
+                style={styles.menuButton}
+                onPress={() => setSidebarOpen(true)}
+                activeOpacity={0.7}
+            >
+                <Ionicons name="menu" size={28} color="black" />
             </TouchableOpacity>
 
             {!isOnline && (
@@ -654,15 +697,27 @@ export const DriverDashboard = ({ navigation }: any) => {
                                 <View key={ride.id} style={styles.rideCard}>
                                     <View style={{ flex: 1 }}>
                                         <Text style={styles.pickup}>📍 {ride.pickup_location}</Text>
-                                        <Text style={styles.destination}>🏁 {ride.destination}</Text>
-                                        <Text style={styles.fare}>💰 K{ride.fare} • {ride.distance}km</Text>
+                                        <Text style={styles.destination}>🏁 {ride.destination}{ride.is_manual_destination ? " (Custom)" : ""}</Text>
+                                        <Text style={styles.fare}>
+                                            {ride.is_manual_destination
+                                                ? "💰 Calculated at destination"
+                                                : `💰 K${ride.fare} • ${ride.distance}km`}
+                                        </Text>
                                     </View>
-                                    <TouchableOpacity
-                                        style={styles.acceptButton}
-                                        onPress={() => handleAcceptRide(ride.id)}
-                                    >
-                                        <Text style={styles.acceptText}>ACCEPT</Text>
-                                    </TouchableOpacity>
+                                    <View style={{ flexDirection: 'row' }}>
+                                        <TouchableOpacity
+                                            style={styles.rejectButton}
+                                            onPress={() => handleRejectRide(ride.id)}
+                                        >
+                                            <Text style={styles.rejectText}>REJECT</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={styles.acceptButton}
+                                            onPress={() => handleAcceptRide(ride.id)}
+                                        >
+                                            <Text style={styles.acceptText}>ACCEPT</Text>
+                                        </TouchableOpacity>
+                                    </View>
                                 </View>
                             ))
                         )}
@@ -680,7 +735,46 @@ export const DriverDashboard = ({ navigation }: any) => {
                     </View>
 
                     <Text style={styles.pickup}><Text style={{ color: 'green' }}>From:</Text> {activeRide.pickup_location}</Text>
-                    <Text style={styles.destination}><Text style={{ color: 'red' }}>To:</Text> {activeRide.destination}</Text>
+                    <Text style={styles.destination}>
+                        <Text style={{ color: 'red' }}>To:</Text> {activeRide.destination}
+                        {activeRide.is_manual_destination && <Text style={{ color: Colors.gray, fontSize: 12 }}> (Custom Location)</Text>}
+                    </Text>
+
+                    {/* Passenger Details Section */}
+                    <View style={styles.passengerSection}>
+                        <View style={styles.passengerInfo}>
+                            <View style={styles.passengerAvatar}>
+                                <Text style={styles.passengerAvatarText}>{activeRide.passenger_name?.[0] || 'P'}</Text>
+                            </View>
+                            <View style={{ marginLeft: 12, flex: 1 }}>
+                                <Text style={styles.passengerName}>{activeRide.passenger_name || 'Passenger'}</Text>
+                                <Text style={styles.passengerPhoneLabel}>{activeRide.passenger_phone || 'Contact not visible'}</Text>
+                            </View>
+                            {activeRide.passenger_phone && (
+                                <TouchableOpacity
+                                    style={styles.passengerCallBtn}
+                                    onPress={() => {
+                                        // Use React Native's Linking to open the dialer
+                                        const url = `tel:${activeRide.passenger_phone}`;
+                                        import('react-native').then(({ Linking }) => {
+                                            Linking.canOpenURL(url).then(supported => {
+                                                if (supported) Linking.openURL(url);
+                                                else Alert.alert("Error", "Your device doesn't support phone calls");
+                                            });
+                                        });
+                                    }}
+                                >
+                                    <Ionicons name="call" size={20} color="white" />
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+
+                    {activeRide.is_manual_destination && activeRide.status === 'in_progress' && (
+                        <View style={{ backgroundColor: '#fff8e1', padding: 8, borderRadius: 5, marginTop: 5 }}>
+                            <Text style={{ fontSize: 12, color: '#f57c00' }}>⚠️ Fare will be calculated based on actual distance upon completion.</Text>
+                        </View>
+                    )}
 
                     <View style={styles.divider} />
 
@@ -756,6 +850,8 @@ const styles = StyleSheet.create({
     fare: { color: Colors.primary, fontWeight: 'bold' },
     acceptButton: { backgroundColor: Colors.primary, paddingVertical: 8, paddingHorizontal: 15, borderRadius: 5 },
     acceptText: { color: 'white', fontWeight: 'bold' },
+    rejectButton: { backgroundColor: '#e74c3c', paddingVertical: 8, paddingHorizontal: 15, borderRadius: 5, marginRight: 8 },
+    rejectText: { color: 'white', fontWeight: 'bold' },
 
     activeRidePanel: {
         position: 'absolute', bottom: 20, left: 0, right: 0,
@@ -773,6 +869,54 @@ const styles = StyleSheet.create({
     divider: { height: 1, backgroundColor: '#eee', marginVertical: 10 },
     navButton: { backgroundColor: Colors.secondary, padding: 15, borderRadius: 10, alignItems: 'center' },
     navText: { color: Colors.primary, fontWeight: 'bold' },
+    passengerSection: {
+        backgroundColor: '#f8f9fa',
+        borderRadius: 15,
+        padding: 12,
+        marginTop: 15,
+        borderWidth: 1,
+        borderColor: '#e9ecef',
+    },
+    passengerInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    passengerAvatar: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: Colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    passengerAvatarText: {
+        color: 'white',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+    passengerName: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: Colors.text,
+    },
+    passengerPhoneLabel: {
+        fontSize: 13,
+        color: Colors.gray,
+        marginTop: 1,
+    },
+    passengerCallBtn: {
+        backgroundColor: Colors.success,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+    },
 
     overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10 },
     sidebar: {
