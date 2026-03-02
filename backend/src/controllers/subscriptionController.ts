@@ -501,85 +501,43 @@ export const checkExpiredSubscriptions = async () => {
     }
 };
 
-// --- FAILSALE BACKGROUND JOB (Every 5 seconds) ---
+// --- FAILSALE BACKGROUND JOB (Every 30 seconds) ---
 export const syncAllDriverSubscriptions = async () => {
     const now = new Date().toISOString();
 
     try {
-        const driversSnapshot = await db.collection('drivers').get();
-        if (driversSnapshot.empty) return;
+        // 1. Find all active subscriptions that have EXPIRED in the background
+        const expiredSubsSnapshot = await db.collection('driver_subscriptions')
+            .where('status', '==', 'active')
+            .where('expiry_date', '<', now)
+            .get();
 
+        if (expiredSubsSnapshot.empty) {
+            console.log('✅ [Sync] No expired subscriptions found.');
+            return;
+        }
+
+        console.log(`♻️ [Sync] Found ${expiredSubsSnapshot.size} expired records to sync.`);
         const batch = db.batch();
-        let updateFound = false;
 
-        for (const driverDoc of driversSnapshot.docs) {
-            const driverId = driverDoc.id;
-            const driverData = driverDoc.data();
+        for (const subDoc of expiredSubsSnapshot.docs) {
+            const sub = subDoc.data();
+            const driverId = sub.driver_id;
 
-            // Fetch all non-deleted subscriptions for this driver
-            const subsSnapshot = await db.collection('driver_subscriptions')
-                .where('driver_id', '==', driverId)
-                .where('status', '!=', 'deleted')
-                .get();
+            // Mark the sub as expired
+            batch.update(subDoc.ref, { status: 'expired' });
 
-            let targetStatus = 'none';
-            let bestExpiry: string | null = null;
-            let activeSubFound = false;
-            let pausedSubFound = false;
-            let expiredSubFound = false;
-
-            subsSnapshot.docs.forEach(subDoc => {
-                const sub = subDoc.data();
-                if (sub.status === 'active') {
-                    if (sub.expiry_date > now) {
-                        activeSubFound = true;
-                        if (!bestExpiry || sub.expiry_date > bestExpiry) {
-                            bestExpiry = sub.expiry_date;
-                        }
-                    } else {
-                        expiredSubFound = true;
-                        // MARK SUB RECORD AS EXPIRED
-                        batch.update(subDoc.ref, { status: 'expired' });
-                        updateFound = true;
-                    }
-                } else if (sub.status === 'paused') {
-                    pausedSubFound = true;
-                }
+            // Update the driver profile to offline
+            const driverRef = db.collection('drivers').doc(String(driverId));
+            batch.update(driverRef, {
+                subscription_status: 'expired',
+                is_online: false,
+                online_status: 'offline'
             });
-
-            if (activeSubFound) {
-                targetStatus = 'active';
-            } else if (pausedSubFound) {
-                targetStatus = 'paused';
-            } else if (expiredSubFound) {
-                targetStatus = 'expired';
-            }
-
-            // Sync if profile is inconsistent
-            const statusMismatch = driverData.subscription_status !== targetStatus;
-            const expiryMismatch = targetStatus === 'active' && driverData.subscription_expiry !== bestExpiry;
-            const onlineWhenNotActive = targetStatus !== 'active' && driverData.is_online === true;
-
-            if (statusMismatch || expiryMismatch || onlineWhenNotActive) {
-                const updateData: any = {
-                    subscription_status: targetStatus,
-                    subscription_expiry: bestExpiry
-                };
-
-                if (targetStatus !== 'active') {
-                    updateData.is_online = false;
-                    updateData.online_status = 'offline';
-                }
-
-                batch.update(driverDoc.ref, updateData);
-                updateFound = true;
-                console.log(`♻️ Syncing Driver ${driverId} to ${targetStatus}`);
-            }
         }
 
-        if (updateFound) {
-            await batch.commit();
-        }
+        await batch.commit();
+        console.log('✅ [Sync] Successfully synchronized expired drivers.');
 
     } catch (error) {
         console.error('❌ Subscription Sync Job Failed:', error);

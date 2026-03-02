@@ -20,6 +20,16 @@ export const getRideDetails = async (req: Request, res: Response) => {
 
         const ride = rideDoc.data()!;
 
+        // Fetch passenger info
+        if (ride.passenger_id) {
+            const passengerUserDoc = await db.collection('users').doc(ride.passenger_id).get();
+            if (passengerUserDoc.exists) {
+                const pData = passengerUserDoc.data()!;
+                ride.passenger_name = pData.name;
+                ride.passenger_phone = pData.phone;
+            }
+        }
+
         // Fetch driver info if driver is assigned
         if (ride.driver_id) {
             const userDoc = await db.collection('users').doc(ride.driver_id).get();
@@ -54,6 +64,11 @@ export const getRideDetails = async (req: Request, res: Response) => {
         if (ride.passenger_id !== userId && ride.driver_id !== userId && !canMonitor) {
             res.status(403).json({ success: false, message: 'Unauthorized access to this ride' });
             return;
+        }
+
+        // Security: Only show passenger phone to the assigned driver or staff
+        if (ride.driver_id !== userId && !canMonitor) {
+            delete ride.passenger_phone;
         }
 
         if (ride.driver_photo) {
@@ -148,21 +163,45 @@ export const requestRide = async (req: Request, res: Response) => {
 };
 
 export const getPendingRides = async (req: Request, res: Response) => {
+    const driverId = (req as any).user?.id;
+
+    if (!driverId) {
+        res.json({ success: false, message: 'Driver ID required' });
+        return;
+    }
+
     try {
-        console.log('🔍 [GET PENDING RIDES] Fetching pending rides...');
+        console.log(`🔍 [GET PENDING RIDES] Fetching pending rides for Driver ${driverId}...`);
 
-        const querySnapshot = await db.collection('rides')
-            .where('status', '==', 'pending')
-            .get();
-
-        const rides = querySnapshot.docs.map(doc => doc.data());
-
-        console.log(`✅ [GET PENDING RIDES] Found ${rides.length} pending ride(s)`);
-        if (rides.length > 0) {
-            console.log('First ride:', JSON.stringify(rides[0], null, 2));
+        // 1. Check if driver is on a trip. If so, return empty.
+        const driverDoc = await db.collection('drivers').doc(String(driverId)).get();
+        if (driverDoc.exists && driverDoc.data()?.online_status === 'on_trip') {
+            console.log(`🚫 [GET PENDING RIDES] Driver ${driverId} is on trip. Returning 0 rides.`);
+            res.json({ success: true, rides: [] });
+            return;
         }
 
-        res.json({ success: true, rides });
+        // 2. Fetch rejected rides for this driver
+        const rejectionsSnapshot = await db.collection('ride_rejections')
+            .where('driver_id', '==', String(driverId))
+            .get();
+        const rejectedRideIds = new Set(rejectionsSnapshot.docs.map(doc => doc.data().ride_id));
+
+        // 3. Fetch all pending rides (limit to 50 for in-memory filtering)
+        const querySnapshot = await db.collection('rides')
+            .where('status', '==', 'pending')
+            .limit(50)
+            .get();
+
+        const allRides = querySnapshot.docs.map(doc => doc.data());
+
+        // 4. Filter out rejected rides and take first 3
+        const availableRides = allRides
+            .filter(ride => !rejectedRideIds.has(ride.id))
+            .slice(0, 3);
+
+        console.log(`✅ [GET PENDING RIDES] Found ${availableRides.length} ride(s) for driver.`);
+        res.json({ success: true, rides: availableRides });
     } catch (error: any) {
         console.error('❌ [GET PENDING RIDES] Error:', error.message);
         res.json({ success: false, message: error.message });
@@ -229,6 +268,30 @@ export const acceptRide = async (req: Request, res: Response) => {
         }
     } catch (error: any) {
         console.error('Accept Ride Error:', error);
+        res.json({ success: false, message: error.message });
+    }
+};
+
+export const rejectRide = async (req: Request, res: Response) => {
+    const { ride_id } = req.body;
+    const driverId = (req as any).user?.id;
+
+    if (!ride_id || !driverId) {
+        res.json({ success: false, message: 'Ride ID and Driver ID required' });
+        return;
+    }
+
+    try {
+        const rejectionId = `${driverId}_${ride_id}`;
+        await db.collection('ride_rejections').doc(rejectionId).set({
+            driver_id: String(driverId),
+            ride_id: String(ride_id),
+            rejected_at: new Date().toISOString()
+        });
+
+        res.json({ success: true, message: 'Ride rejected successfully' });
+    } catch (error: any) {
+        console.error('Reject Ride Error:', error);
         res.json({ success: false, message: error.message });
     }
 };

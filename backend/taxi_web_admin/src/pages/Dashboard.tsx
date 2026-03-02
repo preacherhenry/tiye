@@ -18,6 +18,7 @@ export const Overview: React.FC = () => {
     const { user } = useAuth();
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         fetchStats();
@@ -30,9 +31,13 @@ export const Overview: React.FC = () => {
             const res = await api.get('/admin/dashboard-stats');
             if (res.data.success) {
                 setData(res.data);
+                setError(null);
+            } else {
+                setError(res.data.message || 'Failed to fetch statistics');
             }
-        } catch (error) {
-            console.error('Overview fetch error:', error);
+        } catch (err: any) {
+            console.error('Overview fetch error:', err);
+            setError(err.response?.data?.message || err.message || 'Network error');
         } finally {
             setLoading(false);
         }
@@ -51,8 +56,26 @@ export const Overview: React.FC = () => {
         </div>
     );
 
-    if (loading) return <div className="p-20 text-center text-gray-400 font-medium">Synchronizing platform data...</div>;
-    if (!data) return <div className="p-20 text-center text-red-500">Service unavailable. Please check backend connection.</div>;
+    if (loading) return (
+        <div className="p-20 text-center">
+            <div className="inline-block w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
+            <div className="text-gray-400 font-medium">Synchronizing platform data...</div>
+        </div>
+    );
+
+    if (error || !data) return (
+        <div className="p-20 text-center">
+            <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+            <div className="text-red-500 text-xl font-bold mb-2">Connection Issue</div>
+            <div className="text-gray-400 mb-8">{error || 'Service unavailable. Please check backend connection.'}</div>
+            <button 
+                onClick={fetchStats}
+                className="px-8 py-3 bg-primary text-black font-bold rounded-xl hover:scale-105 transition-all"
+            >
+                RETRY CONNECTION
+            </button>
+        </div>
+    );
 
     const { stats } = data;
 

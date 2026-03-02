@@ -66,8 +66,8 @@ app.get('/', (req: Request, res: Response) => {
 import { syncAllDriverSubscriptions } from './controllers/subscriptionController';
 
 // Start Background Jobs
-console.log('⏰ Starting 2s Subscription Real-time Sync...');
-setInterval(syncAllDriverSubscriptions, 2000); // 2 seconds
+console.log('⏰ Starting 30s Subscription Sync (Quota Optimized)...');
+setInterval(syncAllDriverSubscriptions, 30000); // 30 seconds (reduced from 2s to save quota)
 
 if (require.main === module) {
     app.listen(PORT, () => {
