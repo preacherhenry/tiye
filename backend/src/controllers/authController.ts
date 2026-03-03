@@ -401,6 +401,7 @@ export const uploadProfilePhoto = async (req: Request, res: Response) => {
         return;
     }
 
+    try {
         const bucket = storage.bucket();
         const destination = `profiles/${Date.now()}-${req.file.originalname}`;
         const fileRef = bucket.file(destination);
