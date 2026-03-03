@@ -317,6 +317,9 @@ export const updateRideStatus = async (req: Request, res: Response) => {
     }
 
     try {
+        let finalFare: number | undefined;
+        let finalDistance: number | undefined;
+
         await db.runTransaction(async (transaction) => {
             const rideRef = db.collection('rides').doc(String(ride_id));
             const rideDoc = await transaction.get(rideRef);
@@ -326,6 +329,8 @@ export const updateRideStatus = async (req: Request, res: Response) => {
             }
 
             const ride = rideDoc.data()!;
+            finalFare = ride.fare;
+            finalDistance = ride.distance;
 
             // If manual trip is completed, calculate final fare based on actual distance
             if (status === 'completed' && ride.is_manual_destination) {
@@ -339,14 +344,15 @@ export const updateRideStatus = async (req: Request, res: Response) => {
                 const rate = Number(rateDoc.data()?.value || 10);
 
                 const actualDistance = Number(distance) || 0;
-                const finalFare = Math.round(baseFare + (actualDistance * rate));
+                finalFare = Math.round(baseFare + (actualDistance * rate));
+                finalDistance = Number(actualDistance.toFixed(2));
 
                 console.log(`💰 Manual Fare Result: Base(${baseFare}) + Distance(${actualDistance}km * ${rate}) = K${finalFare}`);
 
                 transaction.update(rideRef, {
                     status,
                     fare: finalFare,
-                    distance: Number(actualDistance.toFixed(2)),
+                    distance: finalDistance,
                     updated_at: new Date().toISOString()
                 });
             } else {
@@ -366,7 +372,12 @@ export const updateRideStatus = async (req: Request, res: Response) => {
             }
         });
 
-        res.json({ success: true, message: `Ride updated to ${status}` });
+        res.json({
+            success: true,
+            message: `Ride updated to ${status}`,
+            fare: finalFare,
+            distance: finalDistance
+        });
     } catch (error: any) {
         res.json({ success: false, message: error.message });
     }
@@ -385,7 +396,7 @@ export const getPassengerRides = async (req: Request, res: Response) => {
         const querySnapshot = await query.get();
         const rides = await Promise.all(querySnapshot.docs.map(async doc => {
             const ride = doc.data();
-            
+
             // Fetch driver info if assigned
             if (ride.driver_id) {
                 const userDoc = await db.collection('users').doc(ride.driver_id).get();
