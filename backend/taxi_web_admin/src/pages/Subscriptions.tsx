@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
+import { formatDate } from '../utils/dateUtils';
 import {
     CreditCard,
     Plus,
@@ -295,7 +296,7 @@ const Subscriptions: React.FC = () => {
                                             </span>
                                         </td>
                                         <td className="py-6 text-xs text-gray-500">
-                                            {new Date(sub.created_at).toLocaleDateString()}
+                                            {formatDate(sub.created_at)}
                                         </td>
                                         <td className="py-6 text-right">
                                             {sub.status === 'pending' ? (

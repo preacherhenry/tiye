@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { formatDate } from '../utils/dateUtils';
 import {
     ArrowLeft,
     CreditCard,
@@ -149,11 +150,11 @@ const DriverSubscriptions: React.FC = () => {
                                             <div className="flex items-center text-xs text-gray-500 font-bold space-x-4">
                                                 <span className="flex items-center">
                                                     <Calendar className="w-3 h-3 mr-1 text-primary opacity-50" />
-                                                    {sub.expiry_date ? `Expires ${new Date(sub.expiry_date).toLocaleDateString()}` : `K ${sub.price} • ${sub.duration_days} Days`}
+                                                    {sub.expiry_date ? `Expires ${formatDate(sub.expiry_date)}` : `K ${sub.price} • ${sub.duration_days} Days`}
                                                 </span>
                                                 <span className="flex items-center">
                                                     <Clock className="w-3 h-3 mr-1 text-primary opacity-50" />
-                                                    Joined {new Date(sub.created_at).toLocaleDateString()}
+                                                Joined {formatDate(sub.created_at)}
                                                 </span>
                                             </div>
                                         </div>
