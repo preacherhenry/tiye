@@ -355,6 +355,9 @@ export const DriverDashboard = ({ navigation }: any) => {
                                 if (!updatedRide.passenger_phone && prev.passenger_phone) {
                                     merged.passenger_phone = prev.passenger_phone;
                                 }
+                                if (!updatedRide.passenger_photo && prev.passenger_photo) {
+                                    merged.passenger_photo = prev.passenger_photo;
+                                }
 
                                 return merged;
                             });
@@ -776,13 +779,9 @@ export const DriverDashboard = ({ navigation }: any) => {
                                 <TouchableOpacity
                                     style={styles.passengerCallBtn}
                                     onPress={() => {
-                                        // Use React Native's Linking to open the dialer
                                         const url = `tel:${activeRide.passenger_phone}`;
-                                        import('react-native').then(({ Linking }) => {
-                                            Linking.canOpenURL(url).then(supported => {
-                                                if (supported) Linking.openURL(url);
-                                                else Alert.alert("Error", "Your device doesn't support phone calls");
-                                            });
+                                        Linking.openURL(url).catch(() => {
+                                            Alert.alert("Error", "Could not open dialer. Please dial manually: " + activeRide.passenger_phone);
                                         });
                                     }}
                                 >
