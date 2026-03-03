@@ -53,7 +53,7 @@ export const checkExpiredSubscriptions = async () => {
             console.warn('⚠️  Firestore Index required for driver_subscriptions expiry check.');
         }
 
-        // 2. Sync drivers collection status
+        // 2. Sync drivers collection status AND force them offline
         try {
             const expiredDrivers = await db.collection('drivers')
                 .where('subscription_status', '==', 'active')
@@ -63,10 +63,14 @@ export const checkExpiredSubscriptions = async () => {
             if (!expiredDrivers.empty) {
                 const batch = db.batch();
                 expiredDrivers.docs.forEach(doc => {
-                    batch.update(doc.ref, { subscription_status: 'expired' });
+                    batch.update(doc.ref, {
+                        subscription_status: 'expired',
+                        is_online: false,
+                        online_status: 'offline'
+                    });
                 });
                 await batch.commit();
-                console.log(`🕒 [Auto-Expiry] ${expiredDrivers.size} driver(s) subscriptions marked as expired.`);
+                console.log(`🕒 [Auto-Expiry] ${expiredDrivers.size} driver(s) subscriptions expired and forced offline.`);
             }
         } catch (e) {
             console.warn('⚠️  Firestore Index required for drivers collection subscription sync.');

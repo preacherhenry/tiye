@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../services/api';
-import { formatDate } from '../utils/dateUtils';
+import { formatDate, formatDateTime } from '../utils/dateUtils';
 import {
     CreditCard,
     Plus,
@@ -247,8 +247,9 @@ const Subscriptions: React.FC = () => {
                                     <th className="pb-6">Driver</th>
                                     <th className="pb-6">Plan Details</th>
                                     <th className="pb-6">Payment Proof</th>
-                                    <th className="pb-6">Status</th>
-                                    <th className="pb-6">Submitted</th>
+                                        <th className="pb-6">Status</th>
+                                         <th className="pb-6">Verified / Expires</th>
+                                        <th className="pb-6">Submitted</th>
                                     <th className="pb-6 text-right">Verification</th>
                                 </tr>
                             </thead>
@@ -294,6 +295,22 @@ const Subscriptions: React.FC = () => {
                                                 }`}>
                                                 {sub.status}
                                             </span>
+                                        </td>
+                                        <td className="py-6">
+                                            {sub.start_date ? (
+                                                <div>
+                                                    <p className="text-[10px] text-gray-500 font-black uppercase">Verified</p>
+                                                    <p className="text-xs text-gray-300">{formatDateTime(sub.start_date)}</p>
+                                                    {sub.expiry_date && (
+                                                        <>
+                                                            <p className="text-[10px] text-red-400 font-black uppercase mt-1">Expires</p>
+                                                            <p className="text-xs text-red-300">{formatDateTime(sub.expiry_date)}</p>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <span className="text-[10px] text-gray-600 font-black uppercase">Pending</span>
+                                            )}
                                         </td>
                                         <td className="py-6 text-xs text-gray-500">
                                             {formatDate(sub.created_at)}
