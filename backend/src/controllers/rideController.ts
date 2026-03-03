@@ -382,8 +382,29 @@ export const getPassengerRides = async (req: Request, res: Response) => {
             query = query.where('status', '==', status);
         }
 
-        const querySnapshot = await query.get(); // Removed orderBy
-        const rides = querySnapshot.docs.map(doc => doc.data());
+        const querySnapshot = await query.get();
+        const rides = await Promise.all(querySnapshot.docs.map(async doc => {
+            const ride = doc.data();
+            
+            // Fetch driver info if assigned
+            if (ride.driver_id) {
+                const userDoc = await db.collection('users').doc(ride.driver_id).get();
+                if (userDoc.exists) {
+                    const uData = userDoc.data()!;
+                    ride.driver_name = uData.name;
+                    ride.driver_phone = uData.phone;
+                    ride.driver_photo = fixPhotoUrl(uData.profile_photo, req);
+                }
+                const dDoc = await db.collection('drivers').doc(ride.driver_id).get();
+                if (dDoc.exists) {
+                    const dData = dDoc.data()!;
+                    ride.car_model = dData.car_model;
+                    ride.car_color = dData.car_color;
+                    ride.plate_number = dData.plate_number;
+                }
+            }
+            return ride;
+        }));
 
         // Sort in memory
         rides.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -404,8 +425,22 @@ export const getDriverRides = async (req: Request, res: Response) => {
             query = query.where('status', '==', status);
         }
 
-        const querySnapshot = await query.get(); // Removed orderBy
-        const rides = querySnapshot.docs.map(doc => doc.data());
+        const querySnapshot = await query.get();
+        const rides = await Promise.all(querySnapshot.docs.map(async doc => {
+            const ride = doc.data();
+
+            // Fetch passenger info
+            if (ride.passenger_id) {
+                const userDoc = await db.collection('users').doc(ride.passenger_id).get();
+                if (userDoc.exists) {
+                    const uData = userDoc.data()!;
+                    ride.passenger_name = uData.name;
+                    ride.passenger_phone = uData.phone; // Driver usually needs phone
+                    ride.passenger_photo = fixPhotoUrl(uData.profile_photo, req);
+                }
+            }
+            return ride;
+        }));
 
         // Sort in memory
         rides.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
