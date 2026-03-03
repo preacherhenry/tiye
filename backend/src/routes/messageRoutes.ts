@@ -5,22 +5,8 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
-// Ensure messages directory exists
-const uploadDir = 'uploads/messages/';
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Configure Multer for message attachments
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        cb(null, `msg-${Date.now()}-${file.originalname}`);
-    }
-});
-const upload = multer({ storage });
+// Configure Multer for message attachments (Memory Storage)
+const upload = multer({ storage: multer.memoryStorage() });
 
 const router = Router();
 

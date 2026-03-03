@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import * as nodeCrypto from 'crypto';
-import { db } from '../config/firebase';
+import { db, storage } from '../config/firebase';
 
 export const getConversations = async (req: Request, res: Response) => {
     const userId = (req as any).user?.id;
@@ -228,11 +228,16 @@ export const createConversation = async (req: Request, res: Response) => {
 
 export const uploadMessageFile = async (req: Request, res: Response) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: 'No file uploaded' });
-        }
+        const bucket = storage.bucket();
+        const destination = `messages/${Date.now()}-${req.file.originalname}`;
+        const fileRef = bucket.file(destination);
 
-        const fileUrl = `${req.protocol}://${req.get('host')}/uploads/messages/${req.file.filename}`;
+        await fileRef.save(req.file.buffer, {
+            metadata: { contentType: req.file.mimetype },
+            public: true
+        });
+
+        const fileUrl = `https://storage.googleapis.com/${bucket.name}/${destination}`;
         
         res.json({
             success: true,

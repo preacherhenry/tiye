@@ -17,16 +17,8 @@ import path from 'path';
 
 const router = Router();
 
-// Configure Multer for screenshots
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/');
-    },
-    filename: (req, file, cb) => {
-        cb(null, `sub-${Date.now()}${path.extname(file.originalname)}`);
-    }
-});
-const upload = multer({ storage });
+// Configure Multer for screenshots (Memory Storage)
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Driver Routes
 router.get('/plans', authenticateToken, getPlans);

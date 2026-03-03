@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { db } from '../config/firebase';
+import { db, storage } from '../config/firebase';
 import { hasPermission } from '../config/roles';
 
 export const getPlans = async (req: Request, res: Response) => {
@@ -23,8 +23,16 @@ export const submitSubscription = async (req: Request, res: Response) => {
     }
 
     try {
-        const host = req.get('host') || 'localhost:5000';
-        const screenshot_url = `${req.protocol}://${host}/uploads/${file.filename}`;
+        const bucket = storage.bucket();
+        const destination = `subscriptions/${Date.now()}-${file.originalname}`;
+        const fileRef = bucket.file(destination);
+
+        await fileRef.save(file.buffer, {
+            metadata: { contentType: file.mimetype },
+            public: true
+        });
+
+        const screenshot_url = `https://storage.googleapis.com/${bucket.name}/${destination}`;
 
         const batch = db.batch();
         const subRef = db.collection('driver_subscriptions').doc();
