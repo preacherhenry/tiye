@@ -94,7 +94,7 @@ export const sendMessage = async (req: Request, res: Response) => {
         const conversationRef = db.collection('conversations').doc(conversation_id);
         const conversationDoc = await conversationRef.get();
         const conversationDataFromDb = conversationDoc.data();
-        
+
         const updateData: any = {
             last_message: {
                 text,
@@ -186,7 +186,7 @@ export const createConversation = async (req: Request, res: Response) => {
                 const staffSnapshot = await db.collection('users')
                     .where('role', 'in', rolesToFetch)
                     .get();
-                
+
                 staffSnapshot.docs.forEach(doc => {
                     allParticipants.push(doc.id);
                 });
@@ -228,6 +228,10 @@ export const createConversation = async (req: Request, res: Response) => {
 
 export const uploadMessageFile = async (req: Request, res: Response) => {
     try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No file uploaded' });
+        }
+
         const bucket = storage.bucket();
         const destination = `messages/${Date.now()}-${req.file.originalname}`;
         const fileRef = bucket.file(destination);
@@ -238,7 +242,7 @@ export const uploadMessageFile = async (req: Request, res: Response) => {
         });
 
         const fileUrl = `https://storage.googleapis.com/${bucket.name}/${destination}`;
-        
+
         res.json({
             success: true,
             file: {
@@ -261,7 +265,7 @@ export const markAsRead = async (req: Request, res: Response) => {
     try {
         const conversationRef = db.collection('conversations').doc(conversationId);
         const conversationDoc = await conversationRef.get();
-        
+
         if (!conversationDoc.exists) {
             return res.status(404).json({ success: false, message: 'Conversation not found' });
         }
