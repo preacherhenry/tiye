@@ -514,21 +514,31 @@ export const syncAllDriverSubscriptions = async () => {
     const now = new Date().toISOString();
 
     try {
-        // 1. Find all active subscriptions that have EXPIRED in the background
-        const expiredSubsSnapshot = await db.collection('driver_subscriptions')
+        // Find all active subscriptions (Equality only, no index required)
+        const activeSubsSnapshot = await db.collection('driver_subscriptions')
             .where('status', '==', 'active')
-            .where('expiry_date', '<', now)
             .get();
 
-        if (expiredSubsSnapshot.empty) {
-            console.log('✅ [Sync] No expired subscriptions found.');
+        if (activeSubsSnapshot.empty) {
+            console.log('✅ [Sync] No active subscriptions found.');
             return;
         }
 
-        console.log(`♻️ [Sync] Found ${expiredSubsSnapshot.size} expired records to sync.`);
+        // Filter for expired ones in memory to avoid needing a composite index
+        const expiredDocs = activeSubsSnapshot.docs.filter(doc => {
+            const data = doc.data();
+            return data.expiry_date && data.expiry_date < now;
+        });
+
+        if (expiredDocs.length === 0) {
+            console.log('✅ [Sync] No expired subscriptions found among active ones.');
+            return;
+        }
+
+        console.log(`♻️ [Sync] Found ${expiredDocs.length} expired records to sync.`);
         const batch = db.batch();
 
-        for (const subDoc of expiredSubsSnapshot.docs) {
+        for (const subDoc of expiredDocs) {
             const sub = subDoc.data();
             const driverId = sub.driver_id;
 
@@ -541,6 +551,12 @@ export const syncAllDriverSubscriptions = async () => {
                 subscription_status: 'expired',
                 is_online: false,
                 online_status: 'offline'
+            });
+
+            // Also update the user doc for consistency
+            const userRef = db.collection('users').doc(String(driverId));
+            batch.update(userRef, {
+                subscription_status: 'expired'
             });
         }
 
