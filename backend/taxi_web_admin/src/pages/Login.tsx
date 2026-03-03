@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogIn, Loader2 } from 'lucide-react';
-import logo from '../assets/tiye_logo.png';
+import logo from '../assets/admin_logo.png';
 
 const Login: React.FC = () => {
     const [identifier, setIdentifier] = useState('');

@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { db } from '../config/firebase';
+import { db, storage } from '../config/firebase';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -289,8 +289,21 @@ export const applyDriver = async (req: Request, res: Response) => {
         const newUserRef = db.collection('users').doc();
         const userId = newUserRef.id;
 
+        const uploadToFirebase = async (file: Express.Multer.File, folder: string) => {
+            const bucket = storage.bucket();
+            const destination = `${folder}/${Date.now()}-${file.originalname}`;
+            const fileRef = bucket.file(destination);
+            
+            await fileRef.save(file.buffer, {
+                metadata: { contentType: file.mimetype },
+                public: true
+            });
+
+            return `https://storage.googleapis.com/${bucket.name}/${destination}`;
+        };
+
         const profilePhoto = files?.['profile_photo']
-            ? `${req.protocol}://${host}/uploads/${files['profile_photo'][0].filename}`
+            ? await uploadToFirebase(files['profile_photo'][0], 'profiles')
             : '';
 
         const userData: any = {
@@ -310,18 +323,10 @@ export const applyDriver = async (req: Request, res: Response) => {
 
         await newUserRef.set(userData);
 
-        // 4. Map File Paths
-        const getFileUrl = (fieldname: string) => {
-            if (files && files[fieldname]) {
-                return `${req.protocol}://${host}/uploads/${files[fieldname][0].filename}`;
-            }
-            return '';
-        };
-
-        const licenseFront = getFileUrl('license_front');
-        const licenseBack = getFileUrl('license_back');
-        const nrcFront = getFileUrl('nrc_front');
-        const nrcBack = getFileUrl('nrc_back');
+        const licenseFront = files?.['license_front'] ? await uploadToFirebase(files['license_front'][0], 'documents') : '';
+        const licenseBack = files?.['license_back'] ? await uploadToFirebase(files['license_back'][0], 'documents') : '';
+        const nrcFront = files?.['nrc_front'] ? await uploadToFirebase(files['nrc_front'][0], 'documents') : '';
+        const nrcBack = files?.['nrc_back'] ? await uploadToFirebase(files['nrc_back'][0], 'documents') : '';
 
         // 5. Create Application
         const appRef = db.collection('driver_applications').doc();
@@ -396,15 +401,22 @@ export const uploadProfilePhoto = async (req: Request, res: Response) => {
         return;
     }
 
-    try {
-        const host = req.get('host') || 'localhost:5000';
-        const photoUrl = `${req.protocol}://${host}/uploads/${req.file.filename}`;
+        const bucket = storage.bucket();
+        const destination = `profiles/${Date.now()}-${req.file.originalname}`;
+        const fileRef = bucket.file(destination);
+
+        await fileRef.save(req.file.buffer, {
+            metadata: { contentType: req.file.mimetype },
+            public: true
+        });
+
+        const photoUrl = `https://storage.googleapis.com/${bucket.name}/${destination}`;
 
         await db.collection('users').doc(userId).update({
             profile_photo: photoUrl
         });
 
-        res.json({ success: true, message: 'Photo uploaded successfully', photoUrl: fixPhotoUrl(photoUrl, req) });
+        res.json({ success: true, message: 'Photo uploaded successfully', photoUrl });
     } catch (error: any) {
         res.json({ success: false, message: error.message });
     }

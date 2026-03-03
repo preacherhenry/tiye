@@ -5,16 +5,8 @@ import path from 'path';
 
 const router = Router();
 
-// Configure Multer
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/');
-    },
-    filename: (req, file, cb) => {
-        cb(null, `user-${Date.now()}${path.extname(file.originalname)}`);
-    }
-});
-const upload = multer({ storage });
+// Configure Multer for Cloud Uploads (Memory Storage)
+const upload = multer({ storage: multer.memoryStorage() });
 
 router.post('/register', register);
 router.post('/apply-driver', upload.fields([

@@ -19,10 +19,12 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT) {
 
 admin.initializeApp({
     credential: credential,
+    storageBucket: 'tiye-taxi-app.firebasestorage.app'
 });
 
 export const db = admin.firestore();
 export const auth = admin.auth();
+export const storage = admin.storage();
 
 console.log('✅ Firebase Admin initialized successfully');
 
