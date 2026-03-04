@@ -116,7 +116,22 @@ export const adminVerifySubscription = async (req: Request, res: Response) => {
 
         if (status === 'active') {
             const startDate = new Date();
-            const expiryDate = new Date(startDate.getTime() + (plan.duration_days * 24 * 60 * 60 * 1000));
+
+            // Calculate expiry based on duration unit and value
+            const durationValue = plan.duration_value || plan.duration_days || 0;
+            const durationUnit = plan.duration_unit || 'days';
+
+            let durationMs = 0;
+            if (durationUnit === 'hours') {
+                durationMs = durationValue * 60 * 60 * 1000;
+            } else if (durationUnit === 'weeks') {
+                durationMs = durationValue * 7 * 24 * 60 * 60 * 1000;
+            } else {
+                // Default to days
+                durationMs = durationValue * 24 * 60 * 60 * 1000;
+            }
+
+            const expiryDate = new Date(startDate.getTime() + durationMs);
 
             const batch = db.batch();
             batch.update(subRef, {
@@ -160,14 +175,15 @@ export const adminVerifySubscription = async (req: Request, res: Response) => {
 };
 
 export const adminCreatePlan = async (req: Request, res: Response) => {
-    const { name, price, duration_days, description } = req.body;
+    const { name, price, duration_value, duration_unit, description } = req.body;
     try {
         const planRef = db.collection('subscription_plans').doc();
         await planRef.set({
             id: planRef.id,
             name,
             price,
-            duration_days,
+            duration_value,
+            duration_unit,
             description,
             status: 'active',
             created_at: new Date().toISOString()
@@ -189,12 +205,13 @@ export const adminGetPlans = async (req: Request, res: Response) => {
 };
 
 export const adminUpdatePlan = async (req: Request, res: Response) => {
-    const { id, name, price, duration_days, description, status } = req.body;
+    const { id, name, price, duration_value, duration_unit, description, status } = req.body;
     try {
         await db.collection('subscription_plans').doc(id).update({
             name,
             price,
-            duration_days,
+            duration_value,
+            duration_unit,
             description,
             status
         });
@@ -567,3 +584,62 @@ export const syncAllDriverSubscriptions = async () => {
         console.error('❌ Subscription Sync Job Failed:', error);
     }
 };
+
+// --- DRIVER HISTORY ---
+export const getDriverSubscriptionHistory = async (req: Request, res: Response) => {
+    const { driver_id } = req.params;
+
+    try {
+        const querySnapshot = await db.collection('driver_subscriptions')
+            .where('driver_id', '==', String(driver_id))
+            .where('status', 'in', ['expired', 'rejected'])
+            .orderBy('created_at', 'desc')
+            .get();
+
+        const historyPromises = querySnapshot.docs.map(async (doc) => {
+            const data = doc.data();
+            const planDoc = await db.collection('subscription_plans').doc(data.plan_id).get();
+            const planData = planDoc.data() || {};
+
+            return {
+                id: doc.id,
+                ...data,
+                plan_name: planData.name,
+                price: planData.price
+            };
+        });
+
+        const history = await Promise.all(historyPromises);
+        res.json({ success: true, history });
+
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const clearDriverSubscriptionHistory = async (req: Request, res: Response) => {
+    const { driver_id } = req.params;
+
+    try {
+        const querySnapshot = await db.collection('driver_subscriptions')
+            .where('driver_id', '==', String(driver_id))
+            .where('status', 'in', ['expired', 'rejected'])
+            .get();
+
+        if (querySnapshot.empty) {
+            return res.json({ success: true, message: 'History is already empty.' });
+        }
+
+        const batch = db.batch();
+        querySnapshot.docs.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+
+        await batch.commit();
+        res.json({ success: true, message: 'Subscription history cleared successfully.' });
+
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+

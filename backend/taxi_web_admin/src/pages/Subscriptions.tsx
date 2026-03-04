@@ -25,19 +25,24 @@ interface Plan {
     id: number;
     name: string;
     price: number;
-    duration_days: number;
+    duration_days?: number;
+    duration_value?: number;
+    duration_unit?: 'hours' | 'days' | 'weeks';
     description: string;
     status: 'active' | 'inactive';
 }
 
 interface Subscription {
     id: number;
+    name?: string;
     driver_id: number;
     driver_name: string;
     driver_phone: string;
     plan_name: string;
     price: number | string;
-    duration_days: number;
+    duration_days?: number;
+    duration_value?: number;
+    duration_unit?: 'hours' | 'days' | 'weeks';
     screenshot_url: string | null;
     status: 'pending' | 'active' | 'expired' | 'rejected' | 'paused';
     start_date: string;
@@ -148,7 +153,7 @@ const Subscriptions: React.FC = () => {
                 {activeTab === 'plans' && (
                     <button
                         onClick={() => {
-                            setCurrentPlan({ name: '', price: 0, duration_days: 0, description: '', status: 'active' });
+                            setCurrentPlan({ name: '', price: 0, duration_value: 0, duration_unit: 'days', description: '', status: 'active' });
                             setShowPlanModal(true);
                         }}
                         className="flex items-center px-6 py-3 bg-primary text-black font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
@@ -224,7 +229,7 @@ const Subscriptions: React.FC = () => {
 
                             <div className="flex items-baseline mb-4">
                                 <span className="text-4xl font-black text-primary">K{plan.price}</span>
-                                <span className="text-gray-400 ml-2 font-medium">/{plan.duration_days} days</span>
+                                <span className="text-gray-400 ml-2 font-medium">/{plan.duration_value || plan.duration_days} {plan.duration_unit || 'days'}</span>
                             </div>
 
                             <p className="text-gray-400 text-sm mb-8 flex-1 leading-relaxed">
@@ -233,7 +238,7 @@ const Subscriptions: React.FC = () => {
 
                             <div className="pt-6 border-t border-white/5 flex items-center text-[10px] font-black text-gray-500 uppercase tracking-widest">
                                 <Activity className="w-3 h-3 mr-2 text-primary" />
-                                {plan.duration_days} Days Accessibility
+                                {plan.duration_value || plan.duration_days} {plan.duration_unit || 'Days'} Accessibility
                             </div>
                         </div>
                     ))}
@@ -247,9 +252,9 @@ const Subscriptions: React.FC = () => {
                                     <th className="pb-6">Driver</th>
                                     <th className="pb-6">Plan Details</th>
                                     <th className="pb-6">Payment Proof</th>
-                                        <th className="pb-6">Status</th>
-                                         <th className="pb-6">Verified / Expires</th>
-                                        <th className="pb-6">Submitted</th>
+                                    <th className="pb-6">Status</th>
+                                    <th className="pb-6">Verified / Expires</th>
+                                    <th className="pb-6">Submitted</th>
                                     <th className="pb-6 text-right">Verification</th>
                                 </tr>
                             </thead>
@@ -265,7 +270,7 @@ const Subscriptions: React.FC = () => {
                                         <td className="py-6">
                                             <div>
                                                 <p className="font-bold text-sm text-primary">{sub.plan_name}</p>
-                                                <p className="text-[10px] text-gray-500 font-black tracking-tight">K{sub.price} • {sub.duration_days} Days</p>
+                                                <p className="text-[10px] text-gray-500 font-black tracking-tight">K{sub.price} • {sub.duration_value || sub.duration_days} {sub.duration_unit || 'Days'}</p>
                                             </div>
                                         </td>
                                         <td className="py-6">
@@ -416,15 +421,29 @@ const Subscriptions: React.FC = () => {
                                         required
                                     />
                                 </div>
-                                <div>
-                                    <label className="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Duration (Days)</label>
-                                    <input
-                                        type="number"
-                                        value={currentPlan?.duration_days}
-                                        onChange={(e) => setCurrentPlan({ ...currentPlan, duration_days: Number(e.target.value) })}
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-primary transition-all font-bold"
-                                        required
-                                    />
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Value</label>
+                                        <input
+                                            type="number"
+                                            value={currentPlan?.duration_value || currentPlan?.duration_days}
+                                            onChange={(e) => setCurrentPlan({ ...currentPlan, duration_value: Number(e.target.value) })}
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-3 focus:outline-none focus:border-primary transition-all font-bold"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Unit</label>
+                                        <select
+                                            value={currentPlan?.duration_unit || 'days'}
+                                            onChange={(e) => setCurrentPlan({ ...currentPlan, duration_unit: e.target.value as any })}
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-3 focus:outline-none focus:border-primary transition-all font-bold"
+                                        >
+                                            <option value="hours">Hours</option>
+                                            <option value="days">Days</option>
+                                            <option value="weeks">Weeks</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                             <div>

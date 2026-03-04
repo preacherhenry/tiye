@@ -9,8 +9,11 @@ import {
     adminUpdatePlan,
     adminDeletePlan,
     adminToggleSubscriptionPause,
-    adminDeleteSubscription
+    adminDeleteSubscription,
+    getDriverSubscriptionHistory,
+    clearDriverSubscriptionHistory
 } from '../controllers/subscriptionController';
+
 import { authenticateToken } from '../middleware/authMiddleware';
 import multer from 'multer';
 import path from 'path';
@@ -23,6 +26,8 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Driver Routes
 router.get('/plans', authenticateToken, getPlans);
 router.post('/subscribe', authenticateToken, upload.single('screenshot'), submitSubscription);
+router.get('/history/:driver_id', authenticateToken, getDriverSubscriptionHistory);
+router.delete('/history/:driver_id', authenticateToken, clearDriverSubscriptionHistory);
 
 // Admin Routes
 router.get('/admin/subscriptions', authenticateToken, adminGetSubscriptions);
