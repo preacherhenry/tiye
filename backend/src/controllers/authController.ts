@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { db, storage } from '../config/firebase';
 import dotenv from 'dotenv';
+import fs from 'fs';
 
 dotenv.config();
 
@@ -289,21 +290,28 @@ export const applyDriver = async (req: Request, res: Response) => {
         const newUserRef = db.collection('users').doc();
         const userId = newUserRef.id;
 
-        const uploadToFirebase = async (file: Express.Multer.File, folder: string) => {
+        const uploadToFirebase = async (file: Express.Multer.File, folder: string, req: Request) => {
             const bucket = storage.bucket();
-            const destination = `${folder}/${Date.now()}-${file.originalname}`;
+            const destination = `${folder}/${file.filename}`;
             const fileRef = bucket.file(destination);
             
-            await fileRef.save(file.buffer, {
-                metadata: { contentType: file.mimetype },
-                public: true
-            });
-
-            return `https://storage.googleapis.com/${bucket.name}/${destination}`;
+            try {
+                // Try to upload to Firebase
+                await fileRef.save(fs.readFileSync(file.path), {
+                    metadata: { contentType: file.mimetype },
+                    public: true
+                });
+                return `https://storage.googleapis.com/${bucket.name}/${destination}`;
+            } catch (error: any) {
+                console.warn(`⚠️ Firebase upload failed for ${file.filename}:`, error.message);
+                // Fallback to local URL
+                const host = req.get('host') || 'localhost:5000';
+                return `${req.protocol}://${host}/uploads/${file.filename}`;
+            }
         };
 
         const profilePhoto = files?.['profile_photo']
-            ? await uploadToFirebase(files['profile_photo'][0], 'profiles')
+            ? await uploadToFirebase(files['profile_photo'][0], 'profiles', req)
             : '';
 
         const userData: any = {
@@ -323,10 +331,10 @@ export const applyDriver = async (req: Request, res: Response) => {
 
         await newUserRef.set(userData);
 
-        const licenseFront = files?.['license_front'] ? await uploadToFirebase(files['license_front'][0], 'documents') : '';
-        const licenseBack = files?.['license_back'] ? await uploadToFirebase(files['license_back'][0], 'documents') : '';
-        const nrcFront = files?.['nrc_front'] ? await uploadToFirebase(files['nrc_front'][0], 'documents') : '';
-        const nrcBack = files?.['nrc_back'] ? await uploadToFirebase(files['nrc_back'][0], 'documents') : '';
+        const licenseFront = files?.['license_front'] ? await uploadToFirebase(files['license_front'][0], 'documents', req) : '';
+        const licenseBack = files?.['license_back'] ? await uploadToFirebase(files['license_back'][0], 'documents', req) : '';
+        const nrcFront = files?.['nrc_front'] ? await uploadToFirebase(files['nrc_front'][0], 'documents', req) : '';
+        const nrcBack = files?.['nrc_back'] ? await uploadToFirebase(files['nrc_back'][0], 'documents', req) : '';
 
         // 5. Create Application
         const appRef = db.collection('driver_applications').doc();
@@ -403,15 +411,21 @@ export const uploadProfilePhoto = async (req: Request, res: Response) => {
 
     try {
         const bucket = storage.bucket();
-        const destination = `profiles/${Date.now()}-${req.file.originalname}`;
+        const destination = `profiles/${req.file.filename}`;
         const fileRef = bucket.file(destination);
 
-        await fileRef.save(req.file.buffer, {
-            metadata: { contentType: req.file.mimetype },
-            public: true
-        });
-
-        const photoUrl = `https://storage.googleapis.com/${bucket.name}/${destination}`;
+        let photoUrl: string;
+        try {
+            await fileRef.save(fs.readFileSync(req.file.path), {
+                metadata: { contentType: req.file.mimetype },
+                public: true
+            });
+            photoUrl = `https://storage.googleapis.com/${bucket.name}/${destination}`;
+        } catch (error: any) {
+            console.warn('⚠️ Firebase upload failed, using local fallback:', error.message);
+            const host = req.get('host') || 'localhost:5000';
+            photoUrl = `${req.protocol}://${host}/uploads/${req.file.filename}`;
+        }
 
         await db.collection('users').doc(userId).update({
             profile_photo: photoUrl
@@ -419,6 +433,7 @@ export const uploadProfilePhoto = async (req: Request, res: Response) => {
 
         res.json({ success: true, message: 'Photo uploaded successfully', photoUrl });
     } catch (error: any) {
+        console.error('Upload Error:', error);
         res.json({ success: false, message: error.message });
     }
 };

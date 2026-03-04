@@ -19,7 +19,7 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT) {
 
 admin.initializeApp({
     credential: credential,
-    storageBucket: 'tiye-taxi-app.firebasestorage.app'
+    storageBucket: 'tiye-taxi-app.appspot.com'
 });
 
 export const db = admin.firestore();

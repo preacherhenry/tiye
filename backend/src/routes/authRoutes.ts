@@ -5,8 +5,17 @@ import path from 'path';
 
 const router = Router();
 
-// Configure Multer for Cloud Uploads (Memory Storage)
-const upload = multer({ storage: multer.memoryStorage() });
+// Configure Multer for local storage with fallback
+const storage_config = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'uploads/');
+    },
+    filename: (req, file, cb) => {
+        const prefix = file.fieldname === 'profile_photo' ? 'user' : 'doc';
+        cb(null, `${prefix}-${Date.now()}${path.extname(file.originalname)}`);
+    }
+});
+const upload = multer({ storage: storage_config });
 
 router.post('/register', register);
 router.post('/apply-driver', upload.fields([

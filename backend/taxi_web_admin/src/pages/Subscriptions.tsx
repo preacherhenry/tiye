@@ -423,12 +423,12 @@ const Subscriptions: React.FC = () => {
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
                                     <div>
-                                        <label className="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Value</label>
+                                        <label className="block text-[10px] font-black uppercase tracking-widest text-gray-500 mb-2">Duration Value</label>
                                         <input
                                             type="number"
                                             value={currentPlan?.duration_value || currentPlan?.duration_days}
                                             onChange={(e) => setCurrentPlan({ ...currentPlan, duration_value: Number(e.target.value) })}
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-3 focus:outline-none focus:border-primary transition-all font-bold"
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-primary transition-all font-bold"
                                             required
                                         />
                                     </div>
@@ -437,11 +437,11 @@ const Subscriptions: React.FC = () => {
                                         <select
                                             value={currentPlan?.duration_unit || 'days'}
                                             onChange={(e) => setCurrentPlan({ ...currentPlan, duration_unit: e.target.value as any })}
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-3 focus:outline-none focus:border-primary transition-all font-bold"
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:border-primary transition-all font-bold cursor-pointer"
                                         >
-                                            <option value="hours">Hours</option>
-                                            <option value="days">Days</option>
-                                            <option value="weeks">Weeks</option>
+                                            <option value="hours" className="bg-black">Hour(s)</option>
+                                            <option value="days" className="bg-black">Day(s)</option>
+                                            <option value="weeks" className="bg-black">Week(s)</option>
                                         </select>
                                     </div>
                                 </div>

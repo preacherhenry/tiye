@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { db, storage } from '../config/firebase';
+import fs from 'fs';
 import { hasPermission } from '../config/roles';
 
 export const getPlans = async (req: Request, res: Response) => {
@@ -24,15 +25,22 @@ export const submitSubscription = async (req: Request, res: Response) => {
 
     try {
         const bucket = storage.bucket();
-        const destination = `subscriptions/${Date.now()}-${file.originalname}`;
+        const destination = `subscriptions/${file.filename}`;
         const fileRef = bucket.file(destination);
 
-        await fileRef.save(file.buffer, {
-            metadata: { contentType: file.mimetype },
-            public: true
-        });
-
-        const screenshot_url = `https://storage.googleapis.com/${bucket.name}/${destination}`;
+        let screenshot_url: string;
+        try {
+            // Try Firebase upload
+            await fileRef.save(fs.readFileSync(file.path), {
+                metadata: { contentType: file.mimetype },
+                public: true
+            });
+            screenshot_url = `https://storage.googleapis.com/${bucket.name}/${destination}`;
+        } catch (error: any) {
+            console.warn('⚠️ Firebase subscription upload failed, using local fallback:', error.message);
+            const host = req.get('host') || 'localhost:5000';
+            screenshot_url = `${req.protocol}://${host}/uploads/${file.filename}`;
+        }
 
         const batch = db.batch();
         const subRef = db.collection('driver_subscriptions').doc();
