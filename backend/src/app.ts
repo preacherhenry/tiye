@@ -60,6 +60,7 @@ app.use('/fares', fareRoutes);
 app.use('/messages', messageRoutes);
 
 app.get('/', (req: Request, res: Response) => {
+    // Last deploy trigger: 2026-03-09 00:40
     res.json({ status: "Taxi node backend running" });
 });
 
