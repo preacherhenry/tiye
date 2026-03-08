@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Dimensions, TextInput, TouchableOpacity, Alert, Platform, ActivityIndicator, Animated, Image, KeyboardAvoidingView, ScrollView, Vibration, Linking } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TextInput, TouchableOpacity, Alert, Platform, ActivityIndicator, Animated, Image, KeyboardAvoidingView, ScrollView, Vibration, Linking, Keyboard } from 'react-native';
+
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { BlurView } from 'expo-blur';
@@ -9,6 +10,7 @@ import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { CHIRUNDU_PLACES, Place } from '../../constants/places';
+import { ActiveTripSummary } from '../../components/ActiveTripSummary';
 
 const { width, height } = Dimensions.get('window');
 
@@ -67,6 +69,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
 
     // Drawer State
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isTrackingDetailVisible, setIsTrackingDetailVisible] = useState(false);
     const slideAnim = useRef(new Animated.Value(-width * 0.7)).current; // Start hidden (left)
 
     // Zoom Level (x3)
@@ -374,6 +377,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
         setRideInfo(null);
         setRouteCoords([]);
         setDriverLoc(null);
+        setIsTrackingDetailVisible(false);
         // We don't clear pickup/coords here to keep the current location active
         setDestination('');
         setDistance(0);
@@ -504,17 +508,22 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
     };
 
     const handleRequestPreview = async () => {
+        console.log("🚀 [Find Ride] Pressed. Pickup:", pickup, "| Dest:", destination);
+        Keyboard.dismiss();
+
         if (!pickup || !destination) {
             Alert.alert("Error", "Please enter pickup and destination");
             return;
         }
 
         setIsLoadingLoc(true);
+        console.log("📡 Fetching settings...");
         const freshSettings = await fetchSettings();
 
         // If the user already explicitly selected a manual option from the list,
         // we skip routing immediately.
         if (isManualDestination) {
+            console.log("📝 Manual Destination detected via flag. Skipping routing.");
             setFare(0);
             setDistance(0);
             setRideStatus('preview');
@@ -524,11 +533,15 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
             return;
         }
 
+        console.log("🗺️ Calculating route...");
         // If destCoords is null (user typed but didn't pick from list), 
         // calculateRoute will attempt to geocode the raw text.
         const success = await calculateRoute(pickup, destination, pickupCoords, destCoords, freshSettings);
+
+        console.log("🏁 Routing finished. Success:", success);
         // Fallback: if routing completely failed (no coords resolved), allow manual booking
         if (!success) {
+            console.log("⚠️ Routing failed or snapped to center. Forcing Manual Preview.");
             setIsManualDestination(true);
             setFare(0);
             setDistance(0);
@@ -538,9 +551,11 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
         setIsLoadingLoc(false);
     };
 
+
     // Returns true if routing succeeded, false if coords could not be resolved (caller handles fallback)
     const calculateRoute = async (pText: string, dText: string, pC: any, dC: any, currentSettings?: any): Promise<boolean> => {
         const s = currentSettings || settings;
+        console.log(`📍 [calculateRoute] P:${pText} D:${dText} | HasCoords: P=${!!pC} D=${!!dC}`);
         try {
             // 1. Top Priority: Exact coords from autocomplete selection (if user tapped a suggestion)
             let p = pC;
@@ -548,14 +563,20 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
 
             // 2. Next Priority: Google Maps / Expo Geocoder (Primary source for name-to-coord resolution)
             if (!p) {
+                console.log(`🔍 Geocoding Pickup: "${pText}"`);
                 const pRes = await Location.geocodeAsync(pText + ", Chirundu, Zambia");
-                if (pRes.length > 0) p = pRes[0];
+                if (pRes.length > 0) {
+                    p = pRes[0];
+                    console.log("✅ Pickup resolved:", p);
+                }
             }
 
             if (!d) {
+                console.log(`🔍 Geocoding Destination: "${dText}"`);
                 const dRes = await Location.geocodeAsync(dText + ", Chirundu, Zambia");
                 if (dRes.length > 0) {
                     const candidate = dRes[0];
+                    console.log("📍 Destination candidate found:", candidate);
 
                     // Smart Snap Detection:
                     // Vague strings in Chirundu often snap to the town center (UCZ Church).
@@ -570,7 +591,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                             // or "Town Center", it's likely a geocoding "guess".
                             const isGenericQuery = dText.toLowerCase().includes("chirundu") || dText.toLowerCase().includes("town center");
                             if (distFromCenter < 0.05 && !isGenericQuery) {
-                                console.log(`📍 [SMART SNAP] Destination "${dText}" snapped to town center. Forcing Manual.`);
+                                console.log(`🛑 [SMART SNAP] Destination "${dText}" snapped to town center (${distFromCenter}km away). Forcing Manual fallback.`);
                                 return false; // Triggers manual fallback in caller
                             }
                         }
@@ -593,11 +614,12 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
             }
 
             if (p && d) {
-
+                console.log("✨ Final Coords Resolved. Fetching OSRM Route...");
                 const url = `http://router.project-osrm.org/route/v1/driving/${p.longitude},${p.latitude};${d.longitude},${d.latitude}?overview=full&geometries=geojson`;
                 const osrm = await fetch(url).then(r => r.json());
 
                 if (osrm.routes && osrm.routes.length > 0) {
+                    console.log("🛣️ OSRM Route found.");
                     const route = osrm.routes[0];
                     setRouteCoords(route.geometry.coordinates.map(([lng, lat]: any) => ({ latitude: lat, longitude: lng })));
 
@@ -649,29 +671,31 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
 
                     setFare(finalFare);
                     setIsManualDestination(false);
+                    setRideStatus('preview');
+                    setPickupCoords(p);
+                    setDestCoords(d);
 
-                    if (rideStatus === 'idle' || rideStatus === 'searching') {
-                        setRideStatus('preview');
-                        setPickupCoords(p);
-                        setDestCoords(d);
-                        mapRef.current?.fitToCoordinates([
-                            { latitude: p.latitude, longitude: p.longitude },
-                            { latitude: d.latitude, longitude: d.longitude }
-                        ], { edgePadding: { top: 50, right: 50, bottom: 300, left: 50 } });
-                    }
+                    console.log(`🎯 Moving to Preview. Fare: K${finalFare}, Distance: ${distKm}km`);
+
+                    mapRef.current?.fitToCoordinates([
+                        { latitude: p.latitude, longitude: p.longitude },
+                        { latitude: d.latitude, longitude: d.longitude }
+                    ], { edgePadding: { top: 50, right: 50, bottom: 300, left: 50 } });
+
                     return true;
                 }
-                // OSRM returned no routes — treat as unresolvable
+                console.log("❌ OSRM returned no routes.");
                 return false;
             } else {
-                // Coords could not be resolved — signal manual fallback
+                console.log("❌ Coords still null after geocoding.");
                 return false;
             }
         } catch (e) {
-            console.log("Routing failed", e);
+            console.log("Routing failed with error:", e);
             return false;
         }
     };
+
 
     // Real-time Driver Route (Driver -> Pickup or Driver -> Destination)
     useEffect(() => {
@@ -860,117 +884,197 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
 
             {/* Main Content Area */}
             <View style={styles.contentContainer}>
+                <ScrollView
+                    style={{ flex: 1 }}
+                    contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end', paddingBottom: 20 }}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Transparent spacer to let map peek through */}
+                    <View style={{ height: height * 0.4 }} />
 
-                {/* 1. INPUT FORM */}
-                {(rideStatus === 'idle' || rideStatus === 'cancelled') && (
-                    <View style={styles.searchBox}>
-                        <Text style={styles.greeting}>Hi, {user?.name} 👋</Text>
+                    {/* 1. BOOKING OR ACTIVE SUMMARY */}
+                    {(rideStatus === 'idle' || rideStatus === 'cancelled') ? (
+                        <View style={styles.searchBox}>
+                            <Text style={styles.greeting}>Hi, {user?.name} 👋</Text>
 
-                        {/* Pickup Input Container */}
-                        <View style={{ zIndex: activeInput === 'pickup' ? 100 : 1 }}>
-                            <TextInput
-                                placeholder="Pickup Location"
-                                style={styles.input}
-                                value={pickup}
-                                onChangeText={(text) => handleSearch(text, 'pickup')}
-                                placeholderTextColor={Colors.gray}
-                                onFocus={() => pickup && handleSearch(pickup, 'pickup')}
-                            />
-                            {activeInput === 'pickup' && (
-                                <ScrollView
-                                    style={styles.autocompleteDropdown}
-                                    contentContainerStyle={{ flexGrow: 1 }}
-                                    keyboardShouldPersistTaps="handled"
-                                    showsVerticalScrollIndicator={true}
-                                >
-                                    {filteredPlaces.length > 0 ? (
-                                        filteredPlaces.map((place, idx) => (
-                                            <TouchableOpacity
-                                                key={idx}
-                                                style={styles.autocompleteItem}
-                                                onPress={() => selectPlace(place)}
-                                            >
-                                                <Ionicons name="location-sharp" size={18} color={Colors.primary} />
-                                                <View style={{ marginLeft: 10 }}>
-                                                    <Text style={styles.placeName}>{place.name}</Text>
-                                                    {place.description && <Text style={styles.placeCategory}>({place.description})</Text>}
-                                                </View>
-                                            </TouchableOpacity>
-                                        ))
-                                    ) : (
-                                        pickup.trim().length > 0 && (
-                                            <TouchableOpacity
-                                                style={styles.noResultItem}
-                                                onPress={() => selectPlace({ name: pickup, description: 'Manual' } as any)}
-                                            >
-                                                <Ionicons name="search-outline" size={20} color={Colors.gray} />
-                                                <View style={{ marginLeft: 10 }}>
-                                                    <Text style={styles.noResultText}>No saved location found</Text>
-                                                    <Text style={[styles.placeCategory, { color: Colors.primary, marginTop: 2 }]}>Tap to search for "{pickup}" anyway</Text>
-                                                </View>
-                                            </TouchableOpacity>
-                                        )
-                                    )}
-                                </ScrollView>
-                            )}
+                            {/* Pickup Input Container */}
+                            <View style={{ zIndex: activeInput === 'pickup' ? 100 : 1 }}>
+                                <TextInput
+                                    placeholder="Pickup Location"
+                                    style={styles.input}
+                                    value={pickup}
+                                    onChangeText={(text) => handleSearch(text, 'pickup')}
+                                    placeholderTextColor={Colors.gray}
+                                    onFocus={() => pickup && handleSearch(pickup, 'pickup')}
+                                />
+                                {activeInput === 'pickup' && (
+                                    <View style={styles.autocompleteOverlay}>
+                                        <ScrollView
+                                            style={styles.autocompleteDropdown}
+                                            contentContainerStyle={{ flexGrow: 1 }}
+                                            keyboardShouldPersistTaps="handled"
+                                            showsVerticalScrollIndicator={true}
+                                        >
+                                            {filteredPlaces.length > 0 ? (
+                                                filteredPlaces.map((place, idx) => (
+                                                    <TouchableOpacity
+                                                        key={idx}
+                                                        style={styles.autocompleteItem}
+                                                        onPress={() => selectPlace(place)}
+                                                    >
+                                                        <Ionicons name="location-sharp" size={18} color={Colors.primary} />
+                                                        <View style={{ marginLeft: 10 }}>
+                                                            <Text style={styles.placeName}>{place.name}</Text>
+                                                            {place.description && <Text style={styles.placeCategory}>({place.description})</Text>}
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                ))
+                                            ) : (
+                                                pickup.trim().length > 0 && (
+                                                    <TouchableOpacity
+                                                        style={styles.noResultItem}
+                                                        onPress={() => selectPlace({ name: pickup, description: 'Manual' } as any)}
+                                                    >
+                                                        <Ionicons name="search-outline" size={20} color={Colors.gray} />
+                                                        <View style={{ marginLeft: 10 }}>
+                                                            <Text style={styles.noResultText}>No saved location found</Text>
+                                                            <Text style={[styles.placeCategory, { color: Colors.primary, marginTop: 2 }]}>Tap to search for "{pickup}" anyway</Text>
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                )
+                                            )}
+                                        </ScrollView>
+                                    </View>
+                                )}
+                            </View>
+
+                            {/* Destination Input Container */}
+                            <View style={{ zIndex: activeInput === 'destination' ? 100 : 1, marginTop: 10 }}>
+                                <TextInput
+                                    placeholder="Enter Destination"
+                                    style={styles.input}
+                                    value={destination}
+                                    onChangeText={(text) => handleSearch(text, 'destination')}
+                                    placeholderTextColor={Colors.gray}
+                                    onFocus={() => destination && handleSearch(destination, 'destination')}
+                                />
+                                {activeInput === 'destination' && (
+                                    <View style={styles.autocompleteOverlay}>
+                                        <ScrollView
+                                            style={styles.autocompleteDropdown}
+                                            contentContainerStyle={{ flexGrow: 1 }}
+                                            keyboardShouldPersistTaps="handled"
+                                            showsVerticalScrollIndicator={true}
+                                        >
+                                            {filteredPlaces.length > 0 ? (
+                                                filteredPlaces.map((place, idx) => (
+                                                    <TouchableOpacity
+                                                        key={idx}
+                                                        style={styles.autocompleteItem}
+                                                        onPress={() => selectPlace(place)}
+                                                    >
+                                                        <Ionicons name="location-sharp" size={18} color={Colors.primary} />
+                                                        <View style={{ marginLeft: 10 }}>
+                                                            <Text style={styles.placeName}>{place.name}</Text>
+                                                            {place.description && <Text style={styles.placeCategory}>({place.description})</Text>}
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                ))
+                                            ) : (
+                                                destination.trim().length > 0 && (
+                                                    <TouchableOpacity
+                                                        style={styles.noResultItem}
+                                                        onPress={() => selectPlace({ name: destination, description: 'Custom destination', isManual: true } as any)}
+                                                    >
+                                                        <Ionicons name="search-outline" size={20} color={Colors.gray} />
+                                                        <View style={{ marginLeft: 10 }}>
+                                                            <Text style={styles.noResultText}>No saved location found</Text>
+                                                            <Text style={[styles.placeCategory, { color: Colors.primary, marginTop: 2 }]}>Book with "{destination}" as custom destination</Text>
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                )
+                                            )}
+                                        </ScrollView>
+                                    </View>
+                                )}
+                            </View>
+
+                            <View style={{ marginTop: 15 }}>
+                                <Button title="Find Ride" onPress={handleRequestPreview} />
+                            </View>
                         </View>
-
-                        {/* Destination Input Container */}
-                        <View style={{ zIndex: activeInput === 'destination' ? 100 : 1 }}>
-                            <TextInput
-                                placeholder="Destination"
-                                style={styles.input}
-                                value={destination}
-                                onChangeText={(text) => handleSearch(text, 'destination')}
-                                placeholderTextColor={Colors.gray}
-                                onFocus={() => destination && handleSearch(destination, 'destination')}
+                    ) : (
+                        ['searching', 'accepted', 'arrived', 'in_progress'].includes(rideStatus) && !isTrackingDetailVisible && (
+                            <ActiveTripSummary
+                                pickup={pickup || rideInfo?.pickup_location || 'Your Location'}
+                                destination={destination || rideInfo?.destination || '...'}
+                                onPress={() => setIsTrackingDetailVisible(true)}
                             />
-                            {activeInput === 'destination' && (
-                                <ScrollView
-                                    style={styles.autocompleteDropdown}
-                                    contentContainerStyle={{ flexGrow: 1 }}
-                                    keyboardShouldPersistTaps="handled"
-                                    showsVerticalScrollIndicator={true}
-                                >
-                                    {filteredPlaces.length > 0 ? (
-                                        filteredPlaces.map((place, idx) => (
-                                            <TouchableOpacity
-                                                key={idx}
-                                                style={styles.autocompleteItem}
-                                                onPress={() => selectPlace(place)}
-                                            >
-                                                <Ionicons name="location-sharp" size={18} color={Colors.primary} />
-                                                <View style={{ marginLeft: 10 }}>
-                                                    <Text style={styles.placeName}>{place.name}</Text>
-                                                    {place.description && <Text style={styles.placeCategory}>({place.description})</Text>}
-                                                </View>
-                                            </TouchableOpacity>
-                                        ))
-                                    ) : (
-                                        destination.trim().length > 0 && (
-                                            <TouchableOpacity
-                                                style={styles.noResultItem}
-                                                onPress={() => selectPlace({ name: destination, description: 'Custom destination', isManual: true } as any)}
-                                            >
-                                                <Ionicons name="search-outline" size={20} color={Colors.gray} />
-                                                <View style={{ marginLeft: 10 }}>
-                                                    <Text style={styles.noResultText}>No saved location found</Text>
-                                                    <Text style={[styles.placeCategory, { color: Colors.primary, marginTop: 2 }]}>Book with "{destination}" as custom destination</Text>
-                                                </View>
-                                            </TouchableOpacity>
-                                        )
-                                    )}
+                        )
+                    )}
+
+                    {/* 2. ADVERTISEMENTS & PROMOTIONS (Visible even during active trips) */}
+                    {!isTrackingDetailVisible && (
+                        <>
+                            {/* Advertisement Posters */}
+                            <View style={styles.adSection}>
+                                <Text style={styles.sectionTitle}>Featured Offers</Text>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.adScroll}>
+                                    {[1, 2, 3].map((i) => (
+                                        <View key={i} style={styles.adPoster}>
+                                            <View style={styles.adImagePlaceholder}>
+                                                <Ionicons name="image-outline" size={40} color={Colors.gray} />
+                                                <Text style={{ color: Colors.gray, marginTop: 10 }}>Poster {i}</Text>
+                                            </View>
+                                            <View style={styles.adContent}>
+                                                <Text style={styles.adTitle}>Big Discount!</Text>
+                                                <Text style={styles.adSubtitle}>Up to 50% off on your next trip.</Text>
+                                            </View>
+                                        </View>
+                                    ))}
                                 </ScrollView>
-                            )}
-                        </View>
+                            </View>
 
-                        <Button title="Find Ride" onPress={handleRequestPreview} />
-                    </View>
-                )}
+                            {/* Business Advertisements */}
+                            <View style={styles.businessSection}>
+                                <Text style={styles.sectionTitle}>Partner Businesses</Text>
+                                <View style={styles.businessGrid}>
+                                    {[1, 2, 4].map((i) => (
+                                        <TouchableOpacity key={i} style={styles.businessCard}>
+                                            <View style={styles.businessIconBox}>
+                                                <Ionicons name="business" size={24} color={Colors.primary} />
+                                            </View>
+                                            <Text style={styles.businessName}>Vendor {i}</Text>
+                                            <Text style={styles.businessPromo}>10% Cash Back</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            </View>
 
-                {/* 2. PREVIEW */}
+                            {/* Promotional Cards */}
+                            <View style={styles.promotionSection}>
+                                <Text style={styles.sectionTitle}>Promotions & Rewards</Text>
+                                <TouchableOpacity style={styles.referralCard} onPress={() => navigation.navigate('Promotions')}>
+                                    <View style={styles.promoIconCircle}>
+                                        <Ionicons name="gift" size={30} color={Colors.black} />
+                                    </View>
+                                    <View style={{ flex: 1, marginLeft: 15 }}>
+                                        <Text style={styles.referralTitle}>Invite Friends</Text>
+                                        <Text style={styles.referralSubtitle}>Get K25 for every new rider you refer!</Text>
+                                    </View>
+                                    <Ionicons name="arrow-forward-circle" size={30} color={Colors.black} />
+                                </TouchableOpacity>
+                            </View>
+                        </>
+                    )}
+
+                    {/* Space for the detailed tracking view if it's active */}
+                    {isTrackingDetailVisible && <View style={{ height: height * 0.5 }} />}
+                </ScrollView>
+
+                {/* 3. PREVIEW & FULL TRACKING (Overlays) */}
                 {rideStatus === 'preview' && (
-                    <>
+                    <View style={styles.overlayContainer}>
                         <View style={styles.previewBox}>
                             {/* Trip summary: pickup and destination */}
                             <View style={{ marginBottom: 15, width: '100%' }}>
@@ -1054,12 +1158,16 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                                 </View>
                             </View>
                         </View>
-                    </>
+                    </View>
                 )}
 
-                {/* 3. ACTIVE RIDE STATUS PANEL */}
-                {!['idle', 'preview', 'completed', 'cancelled'].includes(rideStatus) && (
-                    <>
+                {/* 4. ACTIVE RIDE STATUS PANEL (EXPANDED VIEW) */}
+                {isTrackingDetailVisible && !['idle', 'preview', 'completed', 'cancelled'].includes(rideStatus) && (
+                    <View style={styles.overlayContainer}>
+                        <TouchableOpacity style={styles.minimizeBtn} onPress={() => setIsTrackingDetailVisible(false)}>
+                            <Ionicons name="chevron-down" size={24} color="white" />
+                        </TouchableOpacity>
+
                         <View style={styles.rideIsland}>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                                 <View>
@@ -1134,7 +1242,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                                 <Text style={{ color: Colors.danger, fontWeight: 'bold' }}>Cancel Ride</Text>
                             </TouchableOpacity>
                         </View>
-                    </>
+                    </View>
                 )}
 
                 {/* 4. COMPLETED STATE */}
@@ -1342,4 +1450,56 @@ const styles = StyleSheet.create({
         fontSize: 14,
         fontStyle: 'italic',
     },
+
+    // New Styles for Ads and Promotions
+    overlayContainer: {
+        position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 1000
+    },
+    minimizeBtn: {
+        alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.5)',
+        width: 40, height: 40, borderRadius: 20,
+        justifyContent: 'center', alignItems: 'center', marginBottom: 10
+    },
+    autocompleteOverlay: {
+        position: 'absolute', top: 50, left: 0, right: 0, zIndex: 9999
+    },
+    adSection: { marginTop: 20, paddingHorizontal: 20 },
+    sectionTitle: { fontSize: 13, fontWeight: 'bold', color: Colors.gray, textTransform: 'uppercase', letterSpacing: 1 },
+    adScroll: { marginTop: 10 },
+    adPoster: {
+        width: width * 0.7, backgroundColor: Colors.surface,
+        borderRadius: 20, marginRight: 15, overflow: 'hidden',
+        borderWidth: 1, borderColor: '#333'
+    },
+    adImagePlaceholder: {
+        height: 120, backgroundColor: '#222', justifyContent: 'center', alignItems: 'center'
+    },
+    adContent: { padding: 15 },
+    adTitle: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+    adSubtitle: { color: Colors.gray, fontSize: 12, marginTop: 4 },
+    businessSection: { marginTop: 30, paddingHorizontal: 20 },
+    businessGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: 10 },
+    businessCard: {
+        width: '31%', backgroundColor: Colors.surface, borderRadius: 15,
+        padding: 10, alignItems: 'center', marginBottom: 15,
+        borderWidth: 1, borderColor: '#333'
+    },
+    businessIconBox: {
+        width: 40, height: 40, borderRadius: 10, backgroundColor: Colors.primary + '22',
+        justifyContent: 'center', alignItems: 'center', marginBottom: 8
+    },
+    businessName: { color: 'white', fontSize: 11, fontWeight: 'bold' },
+    businessPromo: { color: Colors.primary, fontSize: 9, marginTop: 2 },
+    promotionSection: { marginTop: 20, paddingHorizontal: 20, marginBottom: 40 },
+    referralCard: {
+        backgroundColor: Colors.primary,
+        padding: 20,
+        borderRadius: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 10
+    },
+    promoIconCircle: { width: 50, height: 50, borderRadius: 25, backgroundColor: Colors.black, justifyContent: 'center', alignItems: 'center' },
+    referralTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.black },
+    referralSubtitle: { fontSize: 12, color: Colors.black, opacity: 0.8 },
 });
