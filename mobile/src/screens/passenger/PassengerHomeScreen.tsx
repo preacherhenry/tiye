@@ -895,72 +895,30 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                     showsVerticalScrollIndicator={false}
                 >
                     {/* 1. BOOKING OR ACTIVE SUMMARY */}
-                    <View style={{ marginTop: 100 }}>
+                    <View style={{ marginTop: 80 }}>
                         {(rideStatus === 'idle' || rideStatus === 'cancelled') ? (
                             <View style={styles.searchBox}>
-                                <Text style={styles.greeting}>Hi, {user?.name} 👋</Text>
-
-                                {/* Pickup Input Container */}
-                                <View style={{ zIndex: activeInput === 'pickup' ? 100 : 1 }}>
-                                    <TextInput
-                                        placeholder="Pickup Location"
-                                        style={styles.input}
-                                        value={pickup}
-                                        onChangeText={(text) => handleSearch(text, 'pickup')}
-                                        placeholderTextColor={Colors.gray}
-                                        onFocus={() => pickup && handleSearch(pickup, 'pickup')}
-                                    />
-                                    {activeInput === 'pickup' && (
-                                        <View style={styles.autocompleteOverlay}>
-                                            <ScrollView
-                                                style={styles.autocompleteDropdown}
-                                                contentContainerStyle={{ flexGrow: 1 }}
-                                                keyboardShouldPersistTaps="handled"
-                                                showsVerticalScrollIndicator={true}
-                                            >
-                                                {filteredPlaces.length > 0 ? (
-                                                    filteredPlaces.map((place, idx) => (
-                                                        <TouchableOpacity
-                                                            key={idx}
-                                                            style={styles.autocompleteItem}
-                                                            onPress={() => selectPlace(place)}
-                                                        >
-                                                            <Ionicons name="location-sharp" size={18} color={Colors.primary} />
-                                                            <View style={{ marginLeft: 10 }}>
-                                                                <Text style={styles.placeName}>{place.name}</Text>
-                                                                {place.description && <Text style={styles.placeCategory}>({place.description})</Text>}
-                                                            </View>
-                                                        </TouchableOpacity>
-                                                    ))
-                                                ) : (
-                                                    pickup.trim().length > 0 && (
-                                                        <TouchableOpacity
-                                                            style={styles.noResultItem}
-                                                            onPress={() => selectPlace({ name: pickup, description: 'Manual' } as any)}
-                                                        >
-                                                            <Ionicons name="search-outline" size={20} color={Colors.gray} />
-                                                            <View style={{ marginLeft: 10 }}>
-                                                                <Text style={styles.noResultText}>No saved location found</Text>
-                                                                <Text style={[styles.placeCategory, { color: Colors.primary, marginTop: 2 }]}>Tap to search for "{pickup}" anyway</Text>
-                                                            </View>
-                                                        </TouchableOpacity>
-                                                    )
-                                                )}
-                                            </ScrollView>
-                                        </View>
-                                    )}
+                                {/* Current Location Label (Compacted) */}
+                                <View style={styles.compactLocationRow}>
+                                    <Ionicons name="location-sharp" size={14} color={Colors.success} />
+                                    <Text style={styles.compactLocationText} numberOfLines={1}>
+                                        {pickup || 'Locating you...'}
+                                    </Text>
                                 </View>
 
-                                {/* Destination Input Container */}
+                                {/* Destination Input Container - Now Primary */}
                                 <View style={{ marginTop: 10, zIndex: activeInput === 'destination' ? 100 : 1 }}>
-                                    <TextInput
-                                        placeholder="Where to?"
-                                        style={styles.input}
-                                        value={destination}
-                                        onChangeText={(text) => handleSearch(text, 'destination')}
-                                        placeholderTextColor={Colors.gray}
-                                        onFocus={() => destination && handleSearch(destination, 'destination')}
-                                    />
+                                    <View style={styles.inputWrapper}>
+                                        <Ionicons name="search" size={20} color={Colors.gray} style={styles.inputIcon} />
+                                        <TextInput
+                                            placeholder="Where to?"
+                                            style={styles.compactInput}
+                                            value={destination}
+                                            onChangeText={(text) => handleSearch(text, 'destination')}
+                                            placeholderTextColor={Colors.gray}
+                                            onFocus={() => destination && handleSearch(destination, 'destination')}
+                                        />
+                                    </View>
                                     {activeInput === 'destination' && (
                                         <View style={styles.autocompleteOverlay}>
                                             <ScrollView
@@ -1323,8 +1281,24 @@ const styles = StyleSheet.create({
     headerTitle: { fontSize: 18, fontWeight: 'bold', marginLeft: 10, color: Colors.background, backgroundColor: Colors.primary, padding: 5, borderRadius: 5 },
     contentContainer: { flex: 1, justifyContent: 'flex-end', paddingBottom: 20 },
     searchBox: {
-        backgroundColor: Colors.surface, padding: 20, borderRadius: 15, elevation: 10,
+        backgroundColor: Colors.surface, padding: 15, borderRadius: 20, elevation: 10,
         marginHorizontal: 20, marginBottom: 10
+    },
+    compactLocationRow: {
+        flexDirection: 'row', alignItems: 'center', marginBottom: 5, paddingHorizontal: 5
+    },
+    compactLocationText: {
+        fontSize: 12, color: Colors.success, marginLeft: 5, fontWeight: '600'
+    },
+    inputWrapper: {
+        flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background,
+        borderRadius: 12, borderWidth: 1, borderColor: '#333'
+    },
+    inputIcon: {
+        paddingHorizontal: 12
+    },
+    compactInput: {
+        flex: 1, padding: 12, color: Colors.text, fontSize: 16
     },
     greeting: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, color: Colors.primary },
     input: {
