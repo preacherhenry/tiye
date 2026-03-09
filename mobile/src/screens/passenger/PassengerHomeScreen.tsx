@@ -974,11 +974,8 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                         )}
                     </View>
 
-                    {/* 2. ADS SECTION HEADER */}
-                    <View style={styles.adSectionHeader}>
-                        <Text style={styles.sectionTitle}>Ads Section</Text>
-                        <View style={styles.adsDivider} />
-                    </View>
+                    {/* 1. BOOKING OR ACTIVE SUMMARY SECTION (Space for spacing only) */}
+                    <View style={{ height: 10 }} />
 
                     {/* 3. VERTICAL POSTERS */}
                     <View style={styles.postersList}>
@@ -1465,25 +1462,25 @@ const styles = StyleSheet.create({
         fontSize: 13, fontWeight: 'bold', color: Colors.gray, textTransform: 'uppercase', letterSpacing: 2
     },
 
-    postersList: { marginTop: 20, paddingHorizontal: 20 },
+    postersList: { marginTop: 10, paddingHorizontal: 15 },
     adPosterVertical: {
         width: '100%', backgroundColor: Colors.surface,
-        borderRadius: 20, marginBottom: 20, overflow: 'hidden',
-        borderWidth: 1, borderColor: '#333', elevation: 5
+        borderRadius: 16, marginBottom: 12, overflow: 'hidden',
+        borderWidth: 1, borderColor: '#333',
     },
     adImagePlaceholder: {
-        height: 160, backgroundColor: '#222', justifyContent: 'center', alignItems: 'center'
+        height: 100, backgroundColor: '#222', justifyContent: 'center', alignItems: 'center'
     },
-    adContent: { padding: 20 },
-    adTitle: { color: 'white', fontWeight: 'bold', fontSize: 18 },
-    adSubtitle: { color: Colors.gray, fontSize: 14, marginTop: 6, lineHeight: 20 },
+    adContent: { padding: 12 },
+    adTitle: { color: 'white', fontWeight: 'bold', fontSize: 15 },
+    adSubtitle: { color: Colors.gray, fontSize: 12, marginTop: 4, lineHeight: 16 },
 
-    businessSection: { marginTop: 20, paddingHorizontal: 20 },
+    businessSection: { marginTop: 10, paddingHorizontal: 15 },
     vendorScroll: { marginTop: 15 },
     vendorCard: {
-        width: 100, backgroundColor: Colors.surface, borderRadius: 18,
-        padding: 15, alignItems: 'center', marginRight: 15,
-        borderWidth: 1, borderColor: '#333', elevation: 3
+        width: 90, backgroundColor: Colors.surface, borderRadius: 14,
+        padding: 10, alignItems: 'center', marginRight: 12,
+        borderWidth: 1, borderColor: '#333'
     },
     businessIconBox: {
         width: 45, height: 45, borderRadius: 12, backgroundColor: Colors.primary + '22',
@@ -1492,15 +1489,15 @@ const styles = StyleSheet.create({
     businessName: { color: 'white', fontSize: 12, fontWeight: 'bold' },
     businessPromo: { color: Colors.primary, fontSize: 10, marginTop: 4 },
 
-    promotionSection: { marginTop: 30, paddingHorizontal: 20, marginBottom: 50 },
+    promotionSection: { marginTop: 15, paddingHorizontal: 15, marginBottom: 30 },
     referralCard: {
         backgroundColor: Colors.primary,
-        padding: 22,
-        borderRadius: 25,
+        padding: 15,
+        borderRadius: 18,
         flexDirection: 'row',
         alignItems: 'center',
     },
-    promoIconCircle: { width: 50, height: 50, borderRadius: 25, backgroundColor: Colors.black, justifyContent: 'center', alignItems: 'center' },
-    referralTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.black },
-    referralSubtitle: { fontSize: 13, color: Colors.black, opacity: 0.8 },
+    promoIconCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.black, justifyContent: 'center', alignItems: 'center' },
+    referralTitle: { fontSize: 15, fontWeight: 'bold', color: Colors.black },
+    referralSubtitle: { fontSize: 11, color: Colors.black, opacity: 0.8 },
 });
