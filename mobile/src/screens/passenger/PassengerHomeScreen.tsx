@@ -1007,7 +1007,77 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                             <ActiveTripSummary
                                 pickup={pickup || rideInfo?.pickup_location || '...'}
                                 destination={destination || rideInfo?.destination || '...'}
-                                {isTrackingDetailVisible && <View style={{ height: height * 0.5 }} />}
+                                status={rideStatus}
+                                driverName={rideInfo?.driver_name}
+                                carPlate={rideInfo?.car_plate}
+                                fare={appliedPromo ? calculateDiscountedFare() : (fare || rideInfo?.fare)}
+                                onDetailsPress={() => setIsTrackingDetailVisible(true)}
+                            />
+                        )}
+                    </View>
+
+                    {/* 2. ADS SECTION HEADER */}
+                    <View style={styles.adSectionHeader}>
+                        <Text style={styles.sectionTitle}>Ads Section</Text>
+                        <View style={styles.adsDivider} />
+                    </View>
+
+                    {/* 3. VERTICAL POSTERS */}
+                    <View style={styles.postersList}>
+                        <View style={styles.adPosterVertical}>
+                            <View style={styles.adImagePlaceholder}>
+                                <Ionicons name="megaphone-outline" size={40} color={Colors.gray} />
+                            </View>
+                            <View style={styles.adContent}>
+                                <Text style={styles.adTitle}>Poster 1: Special Offer</Text>
+                                <Text style={styles.adSubtitle}>Get 20% off your next ride in Chirundu area!</Text>
+                            </View>
+                        </View>
+
+                        <View style={styles.adPosterVertical}>
+                            <View style={styles.adImagePlaceholder}>
+                                <Ionicons name="gift-outline" size={40} color={Colors.gray} />
+                            </View>
+                            <View style={styles.adContent}>
+                                <Text style={styles.adTitle}>Poster 2: Referral Bonus</Text>
+                                <Text style={styles.adSubtitle}>Refer a friend and earn K50 instantly.</Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* 4. HORIZONTAL VENDORS */}
+                    <View style={styles.businessSection}>
+                        <Text style={styles.sectionTitle}>Partner Vendors</Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.vendorScroll}>
+                            {[
+                                { name: 'Vendor 1', icon: 'cart' },
+                                { name: 'Vendor 2', icon: 'fast-food' },
+                                { name: 'Vendor 3', icon: 'briefcase' },
+                                { name: 'Vendor 4', icon: 'medical' },
+                            ].map((vendor, idx) => (
+                                <View key={idx} style={styles.vendorCard}>
+                                    <View style={styles.businessIconBox}>
+                                        <Ionicons name={vendor.icon as any} size={20} color={Colors.primary} />
+                                    </View>
+                                    <Text style={styles.businessName}>{vendor.name}</Text>
+                                    <Text style={styles.businessPromo}>Visit Now</Text>
+                                </View>
+                            ))}
+                        </ScrollView>
+                    </View>
+
+                    {/* 5. REFERRAL/PROMOTION (OPTIONAL EXTRA) */}
+                    <View style={styles.promotionSection}>
+                        <TouchableOpacity style={styles.referralCard}>
+                            <View style={styles.promoIconCircle}>
+                                <Ionicons name="share-social" size={24} color={Colors.primary} />
+                            </View>
+                            <View style={{ marginLeft: 15 }}>
+                                <Text style={styles.referralTitle}>Invite Friends</Text>
+                                <Text style={styles.referralSubtitle}>Get free rides by inviting friends!</Text>
+                            </View>
+                        </TouchableOpacity>
+                    </View>
                 </ScrollView>
 
                 {/* 3. PREVIEW & FULL TRACKING (Overlays) */}
