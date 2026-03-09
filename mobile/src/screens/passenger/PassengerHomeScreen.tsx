@@ -836,43 +836,48 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
             behavior={Platform.OS === "ios" ? "padding" : "padding"}
             keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
         >
-            {/* Map Layer */}
-            <View style={StyleSheet.absoluteFillObject}>
-                <MapView
-                    ref={mapRef}
-                    style={styles.map}
-                    provider={PROVIDER_GOOGLE}
-                    showsUserLocation={true}
-                    initialRegion={{
-                        latitude: -16.0415,
-                        longitude: 28.8510,
-                        latitudeDelta: ZOOM_LEVEL,
-                        longitudeDelta: ZOOM_LEVEL,
-                    }}
-                >
-                    {routeCoords.length > 0 && !isManualDestination && (
-                        <Polyline coordinates={routeCoords} strokeWidth={4} strokeColor={Colors.primary} />
-                    )}
-                    {driverLoc && ['accepted', 'arrived', 'in_progress'].includes(rideStatus) && (
-                        <Marker
-                            coordinate={driverLoc}
-                            title="Driver"
-                            anchor={{ x: 0.5, y: 0.5 }}
-                            rotation={rideInfo?.heading || 0}
-                        >
-                            <Image
-                                source={require('../../../assets/car_marker.png')}
-                                style={{ width: 40, height: 40, resizeMode: 'contain' }}
-                            />
-                        </Marker>
-                    )}
-                    {pickupCoords && rideStatus !== 'idle' && (
-                        <Marker coordinate={pickupCoords} title="Pickup" pinColor="green" />
-                    )}
-                    {destCoords && rideStatus !== 'idle' && (
-                        <Marker coordinate={destCoords} title="Destination" pinColor="red" />
-                    )}
-                </MapView>
+            {/* Map Area / Gray Background */}
+            <View style={styles.mapContainer}>
+                {rideStatus === 'idle' || rideStatus === 'cancelled' ? (
+                    <View style={styles.grayBackground}>
+                        <Ionicons name="car-sport" size={100} color={Colors.surface} style={{ opacity: 0.5 }} />
+                    </View>
+                ) : (
+                    <MapView
+                        ref={mapRef}
+                        style={styles.map}
+                        provider={PROVIDER_GOOGLE}
+                        initialRegion={{
+                            latitude: pickupCoords?.latitude || CHIRUNDU_PLACES[0].latitude,
+                            longitude: pickupCoords?.longitude || CHIRUNDU_PLACES[0].longitude,
+                            latitudeDelta: ZOOM_LEVEL,
+                            longitudeDelta: ZOOM_LEVEL,
+                        }}
+                    >
+                        {routeCoords.length > 0 && !isManualDestination && (
+                            <Polyline coordinates={routeCoords} strokeWidth={4} strokeColor={Colors.primary} />
+                        )}
+                        {driverLoc && ['accepted', 'arrived', 'in_progress'].includes(rideStatus) && (
+                            <Marker
+                                coordinate={driverLoc}
+                                title="Driver"
+                                anchor={{ x: 0.5, y: 0.5 }}
+                                rotation={rideInfo?.heading || 0}
+                            >
+                                <Image
+                                    source={require('../../../assets/car_marker.png')}
+                                    style={{ width: 40, height: 40, resizeMode: 'contain' }}
+                                />
+                            </Marker>
+                        )}
+                        {pickupCoords && rideStatus !== 'idle' && (
+                            <Marker coordinate={pickupCoords} title="Pickup" pinColor="green" />
+                        )}
+                        {destCoords && rideStatus !== 'idle' && (
+                            <Marker coordinate={destCoords} title="Destination" pinColor="red" />
+                        )}
+                    </MapView>
+                )}
             </View>
 
             {/* Header (Hamburger) */}
@@ -886,190 +891,123 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
             <View style={styles.contentContainer}>
                 <ScrollView
                     style={{ flex: 1 }}
-                    contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end', paddingBottom: 20 }}
+                    contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
                     showsVerticalScrollIndicator={false}
                 >
-                    {/* Transparent spacer to let map peek through */}
-                    <View style={{ height: height * 0.4 }} />
-
                     {/* 1. BOOKING OR ACTIVE SUMMARY */}
-                    {(rideStatus === 'idle' || rideStatus === 'cancelled') ? (
-                        <View style={styles.searchBox}>
-                            <Text style={styles.greeting}>Hi, {user?.name} 👋</Text>
+                    <View style={{ marginTop: 100 }}>
+                        {(rideStatus === 'idle' || rideStatus === 'cancelled') ? (
+                            <View style={styles.searchBox}>
+                                <Text style={styles.greeting}>Hi, {user?.name} 👋</Text>
 
-                            {/* Pickup Input Container */}
-                            <View style={{ zIndex: activeInput === 'pickup' ? 100 : 1 }}>
-                                <TextInput
-                                    placeholder="Pickup Location"
-                                    style={styles.input}
-                                    value={pickup}
-                                    onChangeText={(text) => handleSearch(text, 'pickup')}
-                                    placeholderTextColor={Colors.gray}
-                                    onFocus={() => pickup && handleSearch(pickup, 'pickup')}
-                                />
-                                {activeInput === 'pickup' && (
-                                    <View style={styles.autocompleteOverlay}>
-                                        <ScrollView
-                                            style={styles.autocompleteDropdown}
-                                            contentContainerStyle={{ flexGrow: 1 }}
-                                            keyboardShouldPersistTaps="handled"
-                                            showsVerticalScrollIndicator={true}
-                                        >
-                                            {filteredPlaces.length > 0 ? (
-                                                filteredPlaces.map((place, idx) => (
-                                                    <TouchableOpacity
-                                                        key={idx}
-                                                        style={styles.autocompleteItem}
-                                                        onPress={() => selectPlace(place)}
-                                                    >
-                                                        <Ionicons name="location-sharp" size={18} color={Colors.primary} />
-                                                        <View style={{ marginLeft: 10 }}>
-                                                            <Text style={styles.placeName}>{place.name}</Text>
-                                                            {place.description && <Text style={styles.placeCategory}>({place.description})</Text>}
-                                                        </View>
-                                                    </TouchableOpacity>
-                                                ))
-                                            ) : (
-                                                pickup.trim().length > 0 && (
-                                                    <TouchableOpacity
-                                                        style={styles.noResultItem}
-                                                        onPress={() => selectPlace({ name: pickup, description: 'Manual' } as any)}
-                                                    >
-                                                        <Ionicons name="search-outline" size={20} color={Colors.gray} />
-                                                        <View style={{ marginLeft: 10 }}>
-                                                            <Text style={styles.noResultText}>No saved location found</Text>
-                                                            <Text style={[styles.placeCategory, { color: Colors.primary, marginTop: 2 }]}>Tap to search for "{pickup}" anyway</Text>
-                                                        </View>
-                                                    </TouchableOpacity>
-                                                )
-                                            )}
-                                        </ScrollView>
-                                    </View>
-                                )}
-                            </View>
-
-                            {/* Destination Input Container */}
-                            <View style={{ zIndex: activeInput === 'destination' ? 100 : 1, marginTop: 10 }}>
-                                <TextInput
-                                    placeholder="Enter Destination"
-                                    style={styles.input}
-                                    value={destination}
-                                    onChangeText={(text) => handleSearch(text, 'destination')}
-                                    placeholderTextColor={Colors.gray}
-                                    onFocus={() => destination && handleSearch(destination, 'destination')}
-                                />
-                                {activeInput === 'destination' && (
-                                    <View style={styles.autocompleteOverlay}>
-                                        <ScrollView
-                                            style={styles.autocompleteDropdown}
-                                            contentContainerStyle={{ flexGrow: 1 }}
-                                            keyboardShouldPersistTaps="handled"
-                                            showsVerticalScrollIndicator={true}
-                                        >
-                                            {filteredPlaces.length > 0 ? (
-                                                filteredPlaces.map((place, idx) => (
-                                                    <TouchableOpacity
-                                                        key={idx}
-                                                        style={styles.autocompleteItem}
-                                                        onPress={() => selectPlace(place)}
-                                                    >
-                                                        <Ionicons name="location-sharp" size={18} color={Colors.primary} />
-                                                        <View style={{ marginLeft: 10 }}>
-                                                            <Text style={styles.placeName}>{place.name}</Text>
-                                                            {place.description && <Text style={styles.placeCategory}>({place.description})</Text>}
-                                                        </View>
-                                                    </TouchableOpacity>
-                                                ))
-                                            ) : (
-                                                destination.trim().length > 0 && (
-                                                    <TouchableOpacity
-                                                        style={styles.noResultItem}
-                                                        onPress={() => selectPlace({ name: destination, description: 'Custom destination', isManual: true } as any)}
-                                                    >
-                                                        <Ionicons name="search-outline" size={20} color={Colors.gray} />
-                                                        <View style={{ marginLeft: 10 }}>
-                                                            <Text style={styles.noResultText}>No saved location found</Text>
-                                                            <Text style={[styles.placeCategory, { color: Colors.primary, marginTop: 2 }]}>Book with "{destination}" as custom destination</Text>
-                                                        </View>
-                                                    </TouchableOpacity>
-                                                )
-                                            )}
-                                        </ScrollView>
-                                    </View>
-                                )}
-                            </View>
-
-                            <View style={{ marginTop: 15 }}>
-                                <Button title="Find Ride" onPress={handleRequestPreview} />
-                            </View>
-                        </View>
-                    ) : (
-                        ['searching', 'accepted', 'arrived', 'in_progress'].includes(rideStatus) && !isTrackingDetailVisible && (
-                            <ActiveTripSummary
-                                pickup={pickup || rideInfo?.pickup_location || 'Your Location'}
-                                destination={destination || rideInfo?.destination || '...'}
-                                onPress={() => setIsTrackingDetailVisible(true)}
-                            />
-                        )
-                    )}
-
-                    {/* 2. ADVERTISEMENTS & PROMOTIONS (Visible even during active trips) */}
-                    {!isTrackingDetailVisible && (
-                        <>
-                            {/* Advertisement Posters */}
-                            <View style={styles.adSection}>
-                                <Text style={styles.sectionTitle}>Featured Offers</Text>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.adScroll}>
-                                    {[1, 2, 3].map((i) => (
-                                        <View key={i} style={styles.adPoster}>
-                                            <View style={styles.adImagePlaceholder}>
-                                                <Ionicons name="image-outline" size={40} color={Colors.gray} />
-                                                <Text style={{ color: Colors.gray, marginTop: 10 }}>Poster {i}</Text>
-                                            </View>
-                                            <View style={styles.adContent}>
-                                                <Text style={styles.adTitle}>Big Discount!</Text>
-                                                <Text style={styles.adSubtitle}>Up to 50% off on your next trip.</Text>
-                                            </View>
+                                {/* Pickup Input Container */}
+                                <View style={{ zIndex: activeInput === 'pickup' ? 100 : 1 }}>
+                                    <TextInput
+                                        placeholder="Pickup Location"
+                                        style={styles.input}
+                                        value={pickup}
+                                        onChangeText={(text) => handleSearch(text, 'pickup')}
+                                        placeholderTextColor={Colors.gray}
+                                        onFocus={() => pickup && handleSearch(pickup, 'pickup')}
+                                    />
+                                    {activeInput === 'pickup' && (
+                                        <View style={styles.autocompleteOverlay}>
+                                            <ScrollView
+                                                style={styles.autocompleteDropdown}
+                                                contentContainerStyle={{ flexGrow: 1 }}
+                                                keyboardShouldPersistTaps="handled"
+                                                showsVerticalScrollIndicator={true}
+                                            >
+                                                {filteredPlaces.length > 0 ? (
+                                                    filteredPlaces.map((place, idx) => (
+                                                        <TouchableOpacity
+                                                            key={idx}
+                                                            style={styles.autocompleteItem}
+                                                            onPress={() => selectPlace(place)}
+                                                        >
+                                                            <Ionicons name="location-sharp" size={18} color={Colors.primary} />
+                                                            <View style={{ marginLeft: 10 }}>
+                                                                <Text style={styles.placeName}>{place.name}</Text>
+                                                                {place.description && <Text style={styles.placeCategory}>({place.description})</Text>}
+                                                            </View>
+                                                        </TouchableOpacity>
+                                                    ))
+                                                ) : (
+                                                    pickup.trim().length > 0 && (
+                                                        <TouchableOpacity
+                                                            style={styles.noResultItem}
+                                                            onPress={() => selectPlace({ name: pickup, description: 'Manual' } as any)}
+                                                        >
+                                                            <Ionicons name="search-outline" size={20} color={Colors.gray} />
+                                                            <View style={{ marginLeft: 10 }}>
+                                                                <Text style={styles.noResultText}>No saved location found</Text>
+                                                                <Text style={[styles.placeCategory, { color: Colors.primary, marginTop: 2 }]}>Tap to search for "{pickup}" anyway</Text>
+                                                            </View>
+                                                        </TouchableOpacity>
+                                                    )
+                                                )}
+                                            </ScrollView>
                                         </View>
-                                    ))}
-                                </ScrollView>
-                            </View>
+                                    )}
+                                </View>
 
-                            {/* Business Advertisements */}
-                            <View style={styles.businessSection}>
-                                <Text style={styles.sectionTitle}>Partner Businesses</Text>
-                                <View style={styles.businessGrid}>
-                                    {[1, 2, 4].map((i) => (
-                                        <TouchableOpacity key={i} style={styles.businessCard}>
-                                            <View style={styles.businessIconBox}>
-                                                <Ionicons name="business" size={24} color={Colors.primary} />
-                                            </View>
-                                            <Text style={styles.businessName}>Vendor {i}</Text>
-                                            <Text style={styles.businessPromo}>10% Cash Back</Text>
-                                        </TouchableOpacity>
-                                    ))}
+                                {/* Destination Input Container */}
+                                <View style={{ marginTop: 10, zIndex: activeInput === 'destination' ? 100 : 1 }}>
+                                    <TextInput
+                                        placeholder="Where to?"
+                                        style={styles.input}
+                                        value={destination}
+                                        onChangeText={(text) => handleSearch(text, 'destination')}
+                                        placeholderTextColor={Colors.gray}
+                                        onFocus={() => destination && handleSearch(destination, 'destination')}
+                                    />
+                                    {activeInput === 'destination' && (
+                                        <View style={styles.autocompleteOverlay}>
+                                            <ScrollView
+                                                style={styles.autocompleteDropdown}
+                                                contentContainerStyle={{ flexGrow: 1 }}
+                                                keyboardShouldPersistTaps="handled"
+                                                showsVerticalScrollIndicator={true}
+                                            >
+                                                {filteredPlaces.length > 0 ? (
+                                                    filteredPlaces.map((place, idx) => (
+                                                        <TouchableOpacity
+                                                            key={idx}
+                                                            style={styles.autocompleteItem}
+                                                            onPress={() => selectPlace(place)}
+                                                        >
+                                                            <Ionicons name="location-sharp" size={18} color={Colors.primary} />
+                                                            <View style={{ marginLeft: 10 }}>
+                                                                <Text style={styles.placeName}>{place.name}</Text>
+                                                                {place.description && <Text style={styles.placeCategory}>({place.description})</Text>}
+                                                            </View>
+                                                        </TouchableOpacity>
+                                                    ))
+                                                ) : (
+                                                    destination.trim().length > 0 && (
+                                                        <TouchableOpacity
+                                                            style={styles.noResultItem}
+                                                            onPress={() => selectPlace({ name: destination, description: 'Manual' } as any)}
+                                                        >
+                                                            <Ionicons name="search-outline" size={20} color={Colors.gray} />
+                                                            <View style={{ marginLeft: 10 }}>
+                                                                <Text style={styles.noResultText}>No saved location found</Text>
+                                                                <Text style={[styles.placeCategory, { color: Colors.primary, marginTop: 2 }]}>Tap to use "{destination}" as destination</Text>
+                                                            </View>
+                                                        </TouchableOpacity>
+                                                    )
+                                                )}
+                                            </ScrollView>
+                                        </View>
+                                    )}
                                 </View>
                             </View>
-
-                            {/* Promotional Cards */}
-                            <View style={styles.promotionSection}>
-                                <Text style={styles.sectionTitle}>Promotions & Rewards</Text>
-                                <TouchableOpacity style={styles.referralCard} onPress={() => navigation.navigate('Promotions')}>
-                                    <View style={styles.promoIconCircle}>
-                                        <Ionicons name="gift" size={30} color={Colors.black} />
-                                    </View>
-                                    <View style={{ flex: 1, marginLeft: 15 }}>
-                                        <Text style={styles.referralTitle}>Invite Friends</Text>
-                                        <Text style={styles.referralSubtitle}>Get K25 for every new rider you refer!</Text>
-                                    </View>
-                                    <Ionicons name="arrow-forward-circle" size={30} color={Colors.black} />
-                                </TouchableOpacity>
-                            </View>
-                        </>
-                    )}
-
-                    {/* Space for the detailed tracking view if it's active */}
-                    {isTrackingDetailVisible && <View style={{ height: height * 0.5 }} />}
+                        ) : (
+                            /* Ride Summary Island — Only shows when a ride is active/searching/etc */
+                            <ActiveTripSummary
+                                pickup={pickup || rideInfo?.pickup_location || '...'}
+                                destination={destination || rideInfo?.destination || '...'}
+                                {isTrackingDetailVisible && <View style={{ height: height * 0.5 }} />}
                 </ScrollView>
 
                 {/* 3. PREVIEW & FULL TRACKING (Overlays) */}
@@ -1451,7 +1389,15 @@ const styles = StyleSheet.create({
         fontStyle: 'italic',
     },
 
-    // New Styles for Ads and Promotions
+    // Map and Background
+    mapContainer: { ...StyleSheet.absoluteFillObject, backgroundColor: Colors.background },
+    grayBackground: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: '#1A1A1A',
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+
     overlayContainer: {
         position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 1000
     },
@@ -1463,43 +1409,54 @@ const styles = StyleSheet.create({
     autocompleteOverlay: {
         position: 'absolute', top: 50, left: 0, right: 0, zIndex: 9999
     },
-    adSection: { marginTop: 20, paddingHorizontal: 20 },
-    sectionTitle: { fontSize: 13, fontWeight: 'bold', color: Colors.gray, textTransform: 'uppercase', letterSpacing: 1 },
-    adScroll: { marginTop: 10 },
-    adPoster: {
-        width: width * 0.7, backgroundColor: Colors.surface,
-        borderRadius: 20, marginRight: 15, overflow: 'hidden',
-        borderWidth: 1, borderColor: '#333'
+
+    // Ads and Promotions
+    adSectionHeader: {
+        marginTop: 30, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center'
+    },
+    adsDivider: {
+        flex: 1, height: 1, backgroundColor: '#333', marginLeft: 15, opacity: 0.5
+    },
+    sectionTitle: {
+        fontSize: 13, fontWeight: 'bold', color: Colors.gray, textTransform: 'uppercase', letterSpacing: 2
+    },
+
+    postersList: { marginTop: 20, paddingHorizontal: 20 },
+    adPosterVertical: {
+        width: '100%', backgroundColor: Colors.surface,
+        borderRadius: 20, marginBottom: 20, overflow: 'hidden',
+        borderWidth: 1, borderColor: '#333', elevation: 5
     },
     adImagePlaceholder: {
-        height: 120, backgroundColor: '#222', justifyContent: 'center', alignItems: 'center'
+        height: 160, backgroundColor: '#222', justifyContent: 'center', alignItems: 'center'
     },
-    adContent: { padding: 15 },
-    adTitle: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-    adSubtitle: { color: Colors.gray, fontSize: 12, marginTop: 4 },
-    businessSection: { marginTop: 30, paddingHorizontal: 20 },
-    businessGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: 10 },
-    businessCard: {
-        width: '31%', backgroundColor: Colors.surface, borderRadius: 15,
-        padding: 10, alignItems: 'center', marginBottom: 15,
-        borderWidth: 1, borderColor: '#333'
+    adContent: { padding: 20 },
+    adTitle: { color: 'white', fontWeight: 'bold', fontSize: 18 },
+    adSubtitle: { color: Colors.gray, fontSize: 14, marginTop: 6, lineHeight: 20 },
+
+    businessSection: { marginTop: 20, paddingHorizontal: 20 },
+    vendorScroll: { marginTop: 15 },
+    vendorCard: {
+        width: 100, backgroundColor: Colors.surface, borderRadius: 18,
+        padding: 15, alignItems: 'center', marginRight: 15,
+        borderWidth: 1, borderColor: '#333', elevation: 3
     },
     businessIconBox: {
-        width: 40, height: 40, borderRadius: 10, backgroundColor: Colors.primary + '22',
-        justifyContent: 'center', alignItems: 'center', marginBottom: 8
+        width: 45, height: 45, borderRadius: 12, backgroundColor: Colors.primary + '22',
+        justifyContent: 'center', alignItems: 'center', marginBottom: 10
     },
-    businessName: { color: 'white', fontSize: 11, fontWeight: 'bold' },
-    businessPromo: { color: Colors.primary, fontSize: 9, marginTop: 2 },
-    promotionSection: { marginTop: 20, paddingHorizontal: 20, marginBottom: 40 },
+    businessName: { color: 'white', fontSize: 12, fontWeight: 'bold' },
+    businessPromo: { color: Colors.primary, fontSize: 10, marginTop: 4 },
+
+    promotionSection: { marginTop: 30, paddingHorizontal: 20, marginBottom: 50 },
     referralCard: {
         backgroundColor: Colors.primary,
-        padding: 20,
-        borderRadius: 20,
+        padding: 22,
+        borderRadius: 25,
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 10
     },
     promoIconCircle: { width: 50, height: 50, borderRadius: 25, backgroundColor: Colors.black, justifyContent: 'center', alignItems: 'center' },
-    referralTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.black },
-    referralSubtitle: { fontSize: 12, color: Colors.black, opacity: 0.8 },
+    referralTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.black },
+    referralSubtitle: { fontSize: 13, color: Colors.black, opacity: 0.8 },
 });
