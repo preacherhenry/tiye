@@ -883,7 +883,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
             {/* Header (Hamburger) */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={toggleMenu} style={styles.menuBtn}>
-                    <Ionicons name="menu" size={24} color="black" />
+                    <Ionicons name="menu" size={32} color="white" />
                 </TouchableOpacity>
             </View>
 
@@ -1274,10 +1274,10 @@ const styles = StyleSheet.create({
     map: { width: width, height: height },
     header: {
         position: 'absolute', top: 50, left: 20, right: 20,
-        flexDirection: 'row', alignItems: 'center',
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
         zIndex: 10
     },
-    menuBtn: { backgroundColor: 'white', padding: 10, borderRadius: 20, elevation: 5 },
+    menuBtn: { padding: 10 },
     headerTitle: { fontSize: 18, fontWeight: 'bold', marginLeft: 10, color: Colors.background, backgroundColor: Colors.primary, padding: 5, borderRadius: 5 },
     contentContainer: { flex: 1, justifyContent: 'flex-end', paddingBottom: 20 },
     searchBox: {
