@@ -898,13 +898,31 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                     <View style={{ marginTop: 80 }}>
                         {(rideStatus === 'idle' || rideStatus === 'cancelled') ? (
                             <View style={styles.searchBox}>
-                                {/* Current Location Label (Compacted) */}
-                                <View style={styles.compactLocationRow}>
+                                {/* Current Location Label - Now Clickable */}
+                                <TouchableOpacity 
+                                    style={styles.compactLocationRow}
+                                    onPress={() => {
+                                        setActiveInput('pickup');
+                                        if (!pickupCoords) setPickup('Locating you...'); // Hint for re-geocoding
+                                    }}
+                                >
                                     <Ionicons name="location-sharp" size={14} color={Colors.success} />
-                                    <Text style={styles.compactLocationText} numberOfLines={1}>
-                                        {pickup || 'Locating you...'}
-                                    </Text>
-                                </View>
+                                    {activeInput === 'pickup' ? (
+                                        <TextInput
+                                            style={styles.pickupEditInput}
+                                            value={pickup === 'Locating you...' ? '' : pickup}
+                                            onChangeText={(text) => handleSearch(text, 'pickup')}
+                                            placeholder="Enter pickup point"
+                                            placeholderTextColor={Colors.gray}
+                                            autoFocus
+                                            onBlur={() => setActiveInput(null)}
+                                        />
+                                    ) : (
+                                        <Text style={styles.compactLocationText} numberOfLines={1}>
+                                            {pickup || 'Locating you...'}
+                                        </Text>
+                                    )}
+                                </TouchableOpacity>
 
                                 {/* Destination Input Container - Now Primary */}
                                 <View style={{ marginTop: 10, zIndex: activeInput === 'destination' ? 100 : 1 }}>
@@ -916,9 +934,23 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                                             value={destination}
                                             onChangeText={(text) => handleSearch(text, 'destination')}
                                             placeholderTextColor={Colors.gray}
-                                            onFocus={() => destination && handleSearch(destination, 'destination')}
+                                            onFocus={() => {
+                                                setActiveInput('destination');
+                                                if (destination) handleSearch(destination, 'destination');
+                                            }}
                                         />
                                     </View>
+
+                                    {/* Conditional Search Button */}
+                                    {(activeInput === 'destination' || (activeInput === 'pickup' && destination.length > 0 && pickup.length > 0) || (destination.length > 0 && pickup.length > 0)) && (
+                                        <TouchableOpacity 
+                                            style={styles.findRideBtn} 
+                                            onPress={handleRequestPreview}
+                                        >
+                                            <Text style={styles.findRideBtnText}>Find Ride</Text>
+                                            <Ionicons name="arrow-forward" size={18} color="black" />
+                                        </TouchableOpacity>
+                                    )}
                                     {activeInput === 'destination' && (
                                         <View style={styles.autocompleteOverlay}>
                                             <ScrollView
@@ -1000,38 +1032,26 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                         </View>
                     </View>
 
-                    {/* 4. HORIZONTAL VENDORS */}
+                    {/* 4. VENDOR GRID (3 on top, 3 below) */}
                     <View style={styles.businessSection}>
                         <Text style={styles.sectionTitle}>Partner Vendors</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.vendorScroll}>
+                        <View style={styles.vendorGrid}>
                             {[
-                                { name: 'Vendor 1', icon: 'cart' },
-                                { name: 'Vendor 2', icon: 'fast-food' },
-                                { name: 'Vendor 3', icon: 'briefcase' },
-                                { name: 'Vendor 4', icon: 'medical' },
+                                { name: 'Supermarket', icon: 'cart' },
+                                { name: 'Restaurant', icon: 'fast-food' },
+                                { name: 'Pharmacy', icon: 'medical' },
+                                { name: 'Hardware', icon: 'construct' },
+                                { name: 'Laundry', icon: 'shirt' },
+                                { name: 'Bakery', icon: 'pizza' },
                             ].map((vendor, idx) => (
-                                <View key={idx} style={styles.vendorCard}>
-                                    <View style={styles.businessIconBox}>
-                                        <Ionicons name={vendor.icon as any} size={20} color={Colors.primary} />
+                                <TouchableOpacity key={idx} style={styles.vendorCardGrid}>
+                                    <View style={styles.businessIconBoxSmall}>
+                                        <Ionicons name={vendor.icon as any} size={18} color={Colors.primary} />
                                     </View>
-                                    <Text style={styles.businessName}>{vendor.name}</Text>
-                                    <Text style={styles.businessPromo}>Visit Now</Text>
-                                </View>
+                                    <Text style={styles.businessNameSmall} numberOfLines={1}>{vendor.name}</Text>
+                                </TouchableOpacity>
                             ))}
-                        </ScrollView>
-                    </View>
-
-                    {/* 5. REFERRAL/PROMOTION (OPTIONAL EXTRA) */}
-                    <View style={styles.promotionSection}>
-                        <TouchableOpacity style={styles.referralCard}>
-                            <View style={styles.promoIconCircle}>
-                                <Ionicons name="share-social" size={24} color={Colors.primary} />
-                            </View>
-                            <View style={{ marginLeft: 15 }}>
-                                <Text style={styles.referralTitle}>Invite Friends</Text>
-                                <Text style={styles.referralSubtitle}>Get free rides by inviting friends!</Text>
-                            </View>
-                        </TouchableOpacity>
+                        </View>
                     </View>
                 </ScrollView>
 
@@ -1488,6 +1508,60 @@ const styles = StyleSheet.create({
     },
     businessName: { color: 'white', fontSize: 12, fontWeight: 'bold' },
     businessPromo: { color: Colors.primary, fontSize: 10, marginTop: 4 },
+
+    pickupEditInput: {
+        fontSize: 12, color: Colors.success, marginLeft: 5, fontWeight: '600',
+        padding: 0, margin: 0, flex: 1
+    },
+
+    findRideBtn: {
+        backgroundColor: Colors.primary,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 12,
+        borderRadius: 12,
+        marginTop: 15,
+        elevation: 3
+    },
+    findRideBtnText: {
+        color: 'black',
+        fontWeight: 'bold',
+        fontSize: 16,
+        marginRight: 8
+    },
+
+    vendorGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        marginTop: 15,
+    },
+    vendorCardGrid: {
+        width: '31%',
+        backgroundColor: Colors.surface,
+        borderRadius: 14,
+        padding: 10,
+        alignItems: 'center',
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#333',
+    },
+    businessIconBoxSmall: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: Colors.primary + '22',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 8
+    },
+    businessNameSmall: {
+        color: 'white',
+        fontSize: 10,
+        fontWeight: 'bold',
+        textAlign: 'center'
+    },
 
     promotionSection: { marginTop: 15, paddingHorizontal: 15, marginBottom: 30 },
     referralCard: {
