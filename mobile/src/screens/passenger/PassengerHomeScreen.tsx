@@ -898,8 +898,9 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                     <View style={{ marginTop: 80 }}>
                         {(rideStatus === 'idle' || rideStatus === 'cancelled') ? (
                             <View style={styles.searchBox}>
+                                {/* ... existing search box code ... */}
                                 {/* Current Location Label - Now Clickable */}
-                                <TouchableOpacity 
+                                <TouchableOpacity
                                     style={styles.compactLocationRow}
                                     onPress={() => {
                                         setActiveInput('pickup');
@@ -943,8 +944,8 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
 
                                     {/* Conditional Search Button */}
                                     {(activeInput === 'destination' || (activeInput === 'pickup' && destination.length > 0 && pickup.length > 0) || (destination.length > 0 && pickup.length > 0)) && (
-                                        <TouchableOpacity 
-                                            style={styles.findRideBtn} 
+                                        <TouchableOpacity
+                                            style={styles.findRideBtn}
                                             onPress={handleRequestPreview}
                                         >
                                             <Text style={styles.findRideBtnText}>Find Ride</Text>
@@ -994,65 +995,72 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                             </View>
                         ) : (
                             /* Ride Summary Island — Only shows when a ride is active/searching/etc */
-                            <ActiveTripSummary
-                                pickup={pickup || rideInfo?.pickup_location || '...'}
-                                destination={destination || rideInfo?.destination || '...'}
-                                status={rideStatus}
-                                driverName={rideInfo?.driver_name}
-                                carPlate={rideInfo?.car_plate}
-                                fare={appliedPromo ? calculateDiscountedFare() : (fare || rideInfo?.fare)}
-                                onDetailsPress={() => setIsTrackingDetailVisible(true)}
-                            />
+                            /* HIDDEN IN PREVIEW MODE */
+                            rideStatus !== 'preview' && (
+                                <ActiveTripSummary
+                                    pickup={pickup || rideInfo?.pickup_location || '...'}
+                                    destination={destination || rideInfo?.destination || '...'}
+                                    status={rideStatus}
+                                    driverName={rideInfo?.driver_name}
+                                    carPlate={rideInfo?.car_plate}
+                                    fare={appliedPromo ? calculateDiscountedFare() : (fare || rideInfo?.fare)}
+                                    onDetailsPress={() => setIsTrackingDetailVisible(true)}
+                                />
+                            )
                         )}
                     </View>
 
                     {/* 1. BOOKING OR ACTIVE SUMMARY SECTION (Space for spacing only) */}
                     <View style={{ height: 10 }} />
 
-                    {/* 3. VERTICAL POSTERS */}
-                    <View style={styles.postersList}>
-                        <View style={styles.adPosterVertical}>
-                            <View style={styles.adImagePlaceholder}>
-                                <Ionicons name="megaphone-outline" size={40} color={Colors.gray} />
-                            </View>
-                            <View style={styles.adContent}>
-                                <Text style={styles.adTitle}>Poster 1: Special Offer</Text>
-                                <Text style={styles.adSubtitle}>Get 20% off your next ride in Chirundu area!</Text>
-                            </View>
-                        </View>
-
-                        <View style={styles.adPosterVertical}>
-                            <View style={styles.adImagePlaceholder}>
-                                <Ionicons name="gift-outline" size={40} color={Colors.gray} />
-                            </View>
-                            <View style={styles.adContent}>
-                                <Text style={styles.adTitle}>Poster 2: Referral Bonus</Text>
-                                <Text style={styles.adSubtitle}>Refer a friend and earn K50 instantly.</Text>
-                            </View>
-                        </View>
-                    </View>
-
-                    {/* 4. VENDOR GRID (3 on top, 3 below) */}
-                    <View style={styles.businessSection}>
-                        <Text style={styles.sectionTitle}>Partner Vendors</Text>
-                        <View style={styles.vendorGrid}>
-                            {[
-                                { name: 'Supermarket', icon: 'cart' },
-                                { name: 'Restaurant', icon: 'fast-food' },
-                                { name: 'Pharmacy', icon: 'medical' },
-                                { name: 'Hardware', icon: 'construct' },
-                                { name: 'Laundry', icon: 'shirt' },
-                                { name: 'Bakery', icon: 'pizza' },
-                            ].map((vendor, idx) => (
-                                <TouchableOpacity key={idx} style={styles.vendorCardGrid}>
-                                    <View style={styles.businessIconBoxSmall}>
-                                        <Ionicons name={vendor.icon as any} size={18} color={Colors.primary} />
+                    {rideStatus !== 'preview' && (
+                        <>
+                            {/* 3. VERTICAL POSTERS */}
+                            <View style={styles.postersList}>
+                                <View style={styles.adPosterVertical}>
+                                    <View style={styles.adImagePlaceholder}>
+                                        <Ionicons name="megaphone-outline" size={40} color={Colors.gray} />
                                     </View>
-                                    <Text style={styles.businessNameSmall} numberOfLines={1}>{vendor.name}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    </View>
+                                    <View style={styles.adContent}>
+                                        <Text style={styles.adTitle}>Poster 1: Special Offer</Text>
+                                        <Text style={styles.adSubtitle}>Get 20% off your next ride in Chirundu area!</Text>
+                                    </View>
+                                </View>
+
+                                <View style={styles.adPosterVertical}>
+                                    <View style={styles.adImagePlaceholder}>
+                                        <Ionicons name="gift-outline" size={40} color={Colors.gray} />
+                                    </View>
+                                    <View style={styles.adContent}>
+                                        <Text style={styles.adTitle}>Poster 2: Referral Bonus</Text>
+                                        <Text style={styles.adSubtitle}>Refer a friend and earn K50 instantly.</Text>
+                                    </View>
+                                </View>
+                            </View>
+
+                            {/* 4. VENDOR GRID (3 on top, 3 below) */}
+                            <View style={styles.businessSection}>
+                                <Text style={styles.sectionTitle}>Partner Vendors</Text>
+                                <View style={styles.vendorGrid}>
+                                    {[
+                                        { name: 'Supermarket', icon: 'cart' },
+                                        { name: 'Restaurant', icon: 'fast-food' },
+                                        { name: 'Pharmacy', icon: 'medical' },
+                                        { name: 'Hardware', icon: 'construct' },
+                                        { name: 'Laundry', icon: 'shirt' },
+                                        { name: 'Bakery', icon: 'pizza' },
+                                    ].map((vendor, idx) => (
+                                        <TouchableOpacity key={idx} style={styles.vendorCardGrid}>
+                                            <View style={styles.businessIconBoxSmall}>
+                                                <Ionicons name={vendor.icon as any} size={18} color={Colors.primary} />
+                                            </View>
+                                            <Text style={styles.businessNameSmall} numberOfLines={1}>{vendor.name}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            </View>
+                        </>
+                    )}
                 </ScrollView>
 
                 {/* 3. PREVIEW & FULL TRACKING (Overlays) */}
