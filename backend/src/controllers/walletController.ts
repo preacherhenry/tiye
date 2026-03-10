@@ -1,0 +1,177 @@
+import { Request, Response } from 'express';
+import { db, storage } from '../config/firebase';
+import fs from 'fs';
+import { hasPermission } from '../config/roles';
+
+export const requestDeposit = async (req: Request, res: Response) => {
+    const { amount } = req.body;
+    const driver_id = (req as any).user?.id || req.body.driver_id;
+    const file = req.file;
+
+    if (!driver_id || !amount || !file) {
+        return res.json({ success: false, message: 'Driver ID, Amount and payment proof are required' });
+    }
+
+    try {
+        const bucket = storage.bucket();
+        const destination = `deposits/${file.filename}`;
+        const fileRef = bucket.file(destination);
+
+        let proof_photo: string;
+        try {
+            await fileRef.save(fs.readFileSync(file.path), {
+                metadata: { contentType: file.mimetype },
+                public: true
+            });
+            proof_photo = `https://storage.googleapis.com/${bucket.name}/${destination}`;
+        } catch (error: any) {
+            console.warn('⚠️ Firebase deposit upload failed, using local fallback:', error.message);
+            const host = req.get('host') || 'localhost:5000';
+            proof_photo = `${req.protocol}://${host}/uploads/${file.filename}`;
+        }
+
+        const transRef = db.collection('wallet_transactions').doc();
+        await transRef.set({
+            id: transRef.id,
+            driver_id,
+            type: 'deposit',
+            amount: Number(amount),
+            status: 'pending',
+            proof_photo,
+            description: 'Wallet Deposit Request',
+            created_at: new Date().toISOString()
+        });
+
+        res.json({ success: true, message: 'Deposit submitted for verification' });
+    } catch (error: any) {
+        res.json({ success: false, message: error.message });
+    }
+};
+
+export const getWalletHistory = async (req: Request, res: Response) => {
+    const userId = (req as any).user?.id;
+    const userRole = (req as any).user?.role;
+    const { driver_id } = req.params; // If admin is viewing a specific driver
+
+    // Security: Drivers can only see their own wallet. Staff can see anyone's.
+    const targetDriverId = driver_id || userId;
+    
+    if (userRole === 'driver' && targetDriverId !== userId) {
+        return res.status(403).json({ success: false, message: 'Unauthorized access' });
+    }
+
+    try {
+        let query = db.collection('wallet_transactions')
+            .where('driver_id', '==', String(targetDriverId))
+            .orderBy('created_at', 'desc');
+
+        const snapshot = await query.get();
+        let transactions = snapshot.docs.map(doc => doc.data());
+
+        // DRIVER VIEW RULE: Must NOT see trip deductions.
+        if (userRole === 'driver') {
+            transactions = transactions.filter(t => t.type !== 'deduction');
+        }
+
+        res.json({ success: true, transactions });
+    } catch (error: any) {
+        res.json({ success: false, message: error.message });
+    }
+};
+
+export const getWalletBalance = async (req: Request, res: Response) => {
+    const userId = (req as any).user?.id;
+    const { driver_id } = req.params;
+
+    const targetDriverId = driver_id || userId;
+
+    try {
+        const driverDoc = await db.collection('drivers').doc(String(targetDriverId)).get();
+        if (!driverDoc.exists) {
+            return res.json({ success: false, message: 'Driver profile not found' });
+        }
+
+        const balance = driverDoc.data()?.wallet_balance || 0;
+        res.json({ success: true, balance });
+    } catch (error: any) {
+        res.json({ success: false, message: error.message });
+    }
+};
+
+export const adminGetPendingDeposits = async (req: Request, res: Response) => {
+    try {
+        const snapshot = await db.collection('wallet_transactions')
+            .where('type', '==', 'deposit')
+            .where('status', '==', 'pending')
+            .orderBy('created_at', 'desc')
+            .get();
+
+        const deposits = await Promise.all(snapshot.docs.map(async (doc) => {
+            const data = doc.data();
+            const userDoc = await db.collection('users').doc(data.driver_id).get();
+            const userData = userDoc.data() || {};
+            return {
+                ...data,
+                driver_name: userData.name,
+                driver_phone: userData.phone
+            };
+        }));
+
+        res.json({ success: true, deposits });
+    } catch (error: any) {
+        res.json({ success: false, message: error.message });
+    }
+};
+
+export const adminVerifyDeposit = async (req: Request, res: Response) => {
+    const { transaction_id, status } = req.body; // 'approved' or 'rejected'
+    const adminId = (req as any).user?.id;
+
+    if (!['approved', 'rejected'].includes(status)) {
+        return res.json({ success: false, message: 'Invalid status' });
+    }
+
+    try {
+        const transRef = db.collection('wallet_transactions').doc(transaction_id);
+        const transDoc = await transRef.get();
+
+        if (!transDoc.exists) {
+            return res.json({ success: false, message: 'Transaction not found' });
+        }
+
+        const transaction = transDoc.data()!;
+        if (transaction.status !== 'pending') {
+            return res.json({ success: false, message: 'Transaction already processed' });
+        }
+
+        const driverId = transaction.driver_id;
+        const amount = transaction.amount;
+
+        await db.runTransaction(async (t) => {
+            const driverRef = db.collection('drivers').doc(String(driverId));
+            const driverDoc = await t.get(driverRef);
+
+            if (status === 'approved') {
+                const currentBalance = driverDoc.exists ? (driverDoc.data()?.wallet_balance || 0) : 0;
+                const newBalance = currentBalance + amount;
+
+                t.update(driverRef, { wallet_balance: newBalance });
+                t.update(transRef, {
+                    status: 'approved',
+                    processed_by: adminId,
+                    processed_at: new Date().toISOString()
+                });
+            } else {
+                t.update(transRef, {
+                    status: 'rejected',
+                    processed_by: adminId,
+                    processed_at: new Date().toISOString()
+                });
+            }
+        });
+
+        res.json({ success: true, message: `Deposit ${status} successfully` });
+    } catch (error: any) {
+        res.json({ success: false, message: error.message });
+    }
+};
