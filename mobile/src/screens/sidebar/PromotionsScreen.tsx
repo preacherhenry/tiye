@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Activi
 import { Colors } from '../../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../services/api';
+import { formatDate } from '../../utils/dateUtils';
 
 const PromotionsScreen = ({ navigation }: any) => {
     const [promotions, setPromotions] = useState([]);
@@ -106,7 +107,7 @@ const PromotionsScreen = ({ navigation }: any) => {
                                     <View style={styles.expiryBox}>
                                         <Ionicons name="time-outline" size={14} color={Colors.gray} />
                                         <Text style={styles.expiryText}>
-                                            Expires: {new Date(promo.expiry_date).toLocaleDateString()}
+                                            Expires: {formatDate(promo.expiry_date)}
                                         </Text>
                                     </View>
                                     <View style={styles.discountBox}>

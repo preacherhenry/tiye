@@ -15,6 +15,7 @@ import { useAuth } from '../../../context/AuthContext';
 import api from '../../../services/api';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+import { formatDate, formatDateTime } from '../../../utils/dateUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -22,7 +23,9 @@ interface Plan {
     id: number;
     name: string;
     price: number;
-    duration_days: number;
+    duration_days?: number;
+    duration_value?: number;
+    duration_unit?: 'hours' | 'days' | 'weeks';
     description: string;
 }
 
@@ -116,22 +119,34 @@ const SubscriptionScreen = ({ navigation }: any) => {
                 <Text style={styles.headerTitle}>Subscription Plans</Text>
             </View>
 
+
             <ScrollView contentContainerStyle={styles.scrollContent}>
-                <View style={styles.statusCard}>
-                    <Text style={styles.statusLabel}>Current Status</Text>
-                    <View style={styles.statusRow}>
-                        <View style={[styles.statusBadge, {
-                            backgroundColor: user?.subscription_status === 'active' ? Colors.success :
-                                user?.subscription_status === 'pending' ? Colors.primary :
-                                    user?.subscription_status === 'paused' ? '#e67e22' : '#333'
-                        }]}>
-                            <Text style={styles.statusText}>{user?.subscription_status?.toUpperCase() || 'NONE'}</Text>
-                        </View>
-                        {user?.subscription_expiry && (
-                            <Text style={styles.expiryText}>Expires: {new Date(user.subscription_expiry).toLocaleDateString()}</Text>
-                        )}
-                    </View>
+                <View style={styles.topActionRow}>
+                    <View style={{ flex: 1 }} />
+                    <TouchableOpacity onPress={() => navigation.navigate('SubscriptionHistory')} style={styles.historyBtnInline}>
+                        <Ionicons name="time-outline" size={18} color="black" style={{ marginRight: 5 }} />
+                        <Text style={styles.historyBtnTextInline}>HISTORY</Text>
+                    </TouchableOpacity>
                 </View>
+
+                {user?.subscription_status !== 'expired' && (
+                    <View style={styles.statusCard}>
+                        <Text style={styles.statusLabel}>Current Status</Text>
+                        <View style={styles.statusRow}>
+                            <View style={[styles.statusBadge, {
+                                backgroundColor: user?.subscription_status === 'active' ? Colors.success :
+                                    user?.subscription_status === 'pending' ? Colors.primary :
+                                        user?.subscription_status === 'paused' ? '#e67e22' : '#333'
+                            }]}>
+                                <Text style={styles.statusText}>{user?.subscription_status?.toUpperCase() || 'NONE'}</Text>
+                            </View>
+                            {user?.subscription_status === 'active' && user?.subscription_expiry && (
+                                <Text style={styles.expiryText}>Expires: {formatDate(user.subscription_expiry)}</Text>
+                            )}
+                        </View>
+                    </View>
+                )}
+
 
                 <Text style={styles.sectionTitle}>Available Plans</Text>
                 {plans.map(plan => (
@@ -144,7 +159,9 @@ const SubscriptionScreen = ({ navigation }: any) => {
                             <Text style={styles.planName}>{plan.name}</Text>
                             <Text style={styles.planPrice}>K{plan.price}</Text>
                         </View>
-                        <Text style={styles.planDuration}>{plan.duration_days} Days Accessibility</Text>
+                        <Text style={styles.planDuration}>
+                            {plan.duration_value || plan.duration_days} {plan.duration_unit || 'Days'} Accessibility
+                        </Text>
                         <Text style={styles.planDesc}>{plan.description}</Text>
                     </TouchableOpacity>
                 ))}
@@ -206,6 +223,26 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: 'bold',
         color: 'white',
+        flex: 1
+    },
+    topActionRow: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
+    historyBtnInline: {
+        backgroundColor: Colors.primary,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+    },
+    historyBtnTextInline: {
+        color: 'black',
+        fontSize: 12,
+        fontWeight: 'bold',
     },
     scrollContent: {
         padding: 20,
@@ -336,7 +373,8 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '900',
         letterSpacing: 1,
-    }
+    },
 });
+
 
 export default SubscriptionScreen;

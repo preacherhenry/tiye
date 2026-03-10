@@ -17,7 +17,9 @@ import DriverEarningsScreen from '../screens/driver/sidebar/DriverEarningsScreen
 import DriverSettingsScreen from '../screens/driver/sidebar/DriverSettingsScreen';
 import DriverSupportScreen from '../screens/driver/sidebar/DriverSupportScreen';
 import SubscriptionScreen from '../screens/driver/sidebar/SubscriptionScreen';
+import { SubscriptionHistoryScreen } from '../screens/driver/sidebar/SubscriptionHistoryScreen';
 import DriverApplyScreen from '../screens/auth/DriverApplyScreen';
+
 import { useAuth } from '../context/AuthContext';
 import { Colors } from '../constants/colors';
 
@@ -42,6 +44,8 @@ export const AppNavigator = () => {
                             <Stack.Screen name="DriverSettings" component={DriverSettingsScreen} />
                             <Stack.Screen name="DriverSupport" component={DriverSupportScreen} />
                             <Stack.Screen name="Subscription" component={SubscriptionScreen} />
+                            <Stack.Screen name="SubscriptionHistory" component={SubscriptionHistoryScreen} />
+
                         </>
                     ) : (
                         <>

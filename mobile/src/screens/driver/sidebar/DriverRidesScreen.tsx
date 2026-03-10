@@ -4,6 +4,7 @@ import { Colors } from '../../../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
+import { formatDate } from '../../../utils/dateUtils';
 
 const DriverRidesScreen = ({ navigation }: any) => {
     const { user } = useAuth();
@@ -31,7 +32,7 @@ const DriverRidesScreen = ({ navigation }: any) => {
     const renderItem = ({ item }: any) => (
         <TouchableOpacity style={styles.card}>
             <View style={styles.row}>
-                <Text style={styles.date}>{new Date(item.created_at).toLocaleDateString()}</Text>
+                <Text style={styles.date}>{formatDate(item.created_at)}</Text>
                 <Text style={[styles.status, { color: item.status === 'completed' ? 'green' : 'red' }]}>{item.status.toUpperCase()}</Text>
             </View>
             <View style={styles.locationContainer}>

@@ -5,6 +5,7 @@ import { useAuth } from '../../../context/AuthContext'; // Adjust path
 import api from '../../../services/api';
 import { Colors } from '../../../constants/colors';
 import { BlurView } from 'expo-blur';
+import { formatDate } from '../../../utils/dateUtils';
 
 export const SubscriptionMonitor = ({ navigation }: any) => {
     const { user, refreshUser } = useAuth();
@@ -119,7 +120,7 @@ export const SubscriptionMonitor = ({ navigation }: any) => {
                                         >
                                             <View>
                                                 <Text style={styles.planName}>{sub.plan_name}</Text>
-                                                <Text style={styles.planDetails}>Expires: {new Date(sub.expiry_date).toLocaleDateString()}</Text>
+                                                <Text style={styles.planDetails}>Expires: {formatDate(sub.expiry_date)}</Text>
                                             </View>
                                             {switching ? <ActivityIndicator color="#fff" /> : <Text style={styles.switchBtn}>ACTIVATE</Text>}
                                         </TouchableOpacity>

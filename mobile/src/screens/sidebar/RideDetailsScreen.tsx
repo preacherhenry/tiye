@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, ActivityIn
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import api from '../../services/api';
+import { formatDate } from '../../utils/dateUtils';
 
 export const RideDetailsScreen = ({ route, navigation }: any) => {
     const { rideId } = route.params;
@@ -82,14 +83,7 @@ export const RideDetailsScreen = ({ route, navigation }: any) => {
                         </View>
                     </View>
                     <Text style={styles.timestamp}>
-                        {new Date(ride.created_at).toLocaleDateString(undefined, {
-                            weekday: 'long',
-                            day: 'numeric',
-                            month: 'long',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        })}
+                        {formatDate(ride.created_at)} {new Date(ride.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </Text>
                 </View>
 

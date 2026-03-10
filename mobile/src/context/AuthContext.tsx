@@ -1,5 +1,7 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
+import { Alert } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+
 import api, { setUnauthorizedHandler } from '../services/api';
 
 interface User {
@@ -33,6 +35,8 @@ export const AuthProvider = ({ children }: any) => {
     const [user, setUser] = useState<User | null>(null);
     const [token, setToken] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const logoutTimerRef = useRef<any>(null);
+
 
     useEffect(() => {
         loadStorageData();
@@ -117,6 +121,31 @@ export const AuthProvider = ({ children }: any) => {
             const res = await api.get('/profile');
             if (res.data.success) {
                 const serverUser = res.data.user;
+
+                // Auto-logout drivers whose subscription has expired (with 1-min delay)
+                if (serverUser.role === 'driver' && serverUser.subscription_status === 'expired') {
+                    if (!logoutTimerRef.current) {
+                        console.log('🔒 Subscription expired. Starting 1-min logout timer...');
+                        Alert.alert(
+                            "Subscription Expired",
+                            "Your subscription has expired. You will be logged out automatically in 1 minute. Please renew to continue browsing.",
+                            [{ text: "OK" }]
+                        );
+
+                        logoutTimerRef.current = setTimeout(async () => {
+                            console.log('⏰ 1 minute passed. Executing auto-logout.');
+                            await logout();
+                            logoutTimerRef.current = null;
+                        }, 60000);
+                    }
+                    return;
+                } else if (logoutTimerRef.current) {
+                    // Clear timer if status is no longer expired (e.g. user renewed just in time)
+                    clearTimeout(logoutTimerRef.current);
+                    logoutTimerRef.current = null;
+                }
+
+
                 setUser(prev => {
                     if (!prev) return serverUser;
 
@@ -153,8 +182,15 @@ export const AuthProvider = ({ children }: any) => {
                 refreshUser();
             }, 15000); // 15 seconds (optimized for quota)
         }
-        return () => clearInterval(interval);
+        return () => {
+            clearInterval(interval);
+            if (logoutTimerRef.current) {
+                clearTimeout(logoutTimerRef.current);
+                logoutTimerRef.current = null;
+            }
+        };
     }, [token, !!user]);
+
 
     return (
         <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, refreshUser }}>

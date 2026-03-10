@@ -4,6 +4,7 @@ import { Colors } from '../../../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
+import { formatDate } from '../../../utils/dateUtils';
 
 const EarningsScreen = ({ navigation }: any) => {
     const { user } = useAuth();
@@ -86,7 +87,7 @@ const EarningsScreen = ({ navigation }: any) => {
                         <View key={item.id} style={styles.transactionItem}>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.transTitle} numberOfLines={1}>{item.destination}</Text>
-                                <Text style={styles.transDate}>{new Date(item.created_at).toLocaleDateString()} {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                                <Text style={styles.transDate}>{formatDate(item.created_at)} {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
                             </View>
                             <Text style={styles.transAmount}>+ K{item.fare}</Text>
                         </View>

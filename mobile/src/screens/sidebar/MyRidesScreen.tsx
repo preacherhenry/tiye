@@ -4,6 +4,7 @@ import { Colors } from '../../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { formatDate } from '../../utils/dateUtils';
 
 const MyRidesScreen = ({ navigation }: any) => {
     const { user } = useAuth();
@@ -40,7 +41,7 @@ const MyRidesScreen = ({ navigation }: any) => {
                         {item.status.toUpperCase()}
                     </Text>
                 </View>
-                <Text style={styles.date}>{new Date(item.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
+                <Text style={styles.date}>{formatDate(item.created_at)}</Text>
             </View>
 
             <View style={styles.tripInfo}>

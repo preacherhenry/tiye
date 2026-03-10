@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Dimensions, Platform, Alert, Image, ActivityIndicator, Vibration } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Dimensions, Platform, Alert, Image, ActivityIndicator, Vibration, Linking } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Colors } from '../../constants/colors';
@@ -613,12 +613,13 @@ export const DriverDashboard = ({ navigation }: any) => {
             });
             if (res.data.success) {
                 if (status === 'completed') {
+                    const finalFare = res.data.fare;
                     setActiveRide(null);
                     setRouteCoords([]);
                     stopLocationTracking(); // Stop tracking as requested
                     Alert.alert(
                         "✅ Trip Completed",
-                        "You've successfully completed the trip!",
+                        `You've successfully completed the trip!\n\nTrip Fare: K${finalFare || 0}`,
                         [{
                             text: "OK", onPress: () => {
                                 // Optionally restart tracking if they should stay online for new rides
