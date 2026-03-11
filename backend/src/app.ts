@@ -1,5 +1,7 @@
 import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
 import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes';
 import rideRoutes from './routes/rideRoutes';
@@ -18,6 +20,12 @@ dotenv.config();
 
 const app: Application = express();
 const PORT = process.env.PORT || 5000;
+
+// Ensure uploads directory exists
+const uploadsPath = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsPath)) {
+    fs.mkdirSync(uploadsPath, { recursive: true });
+}
 
 app.use(cors());
 app.use(express.json());
@@ -49,7 +57,7 @@ const corsOptions = {
         res.set('Access-Control-Allow-Origin', '*');
     }
 };
-app.use('/uploads', express.static('uploads', corsOptions)); // Serve uploaded files with CORS
+app.use('/uploads', express.static(uploadsPath, corsOptions)); // Serve uploaded files with absolute path
 app.use('/settings', settingsRoutes);
 app.use('/', authRoutes);
 app.use('/', rideRoutes);

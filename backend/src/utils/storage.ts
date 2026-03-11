@@ -36,9 +36,15 @@ export const uploadFile = async (file: Express.Multer.File, folder: string, req:
         }
 
         // Fallback to local URL (Served by Render, but ephemeral)
-        const host = req.get('host') || 'tiye-backend.onrender.com';
-        const fallbackUrl = `${req.protocol}://${host}/uploads/${file.filename}`;
+        // Force HTTPS for production reliability
+        const protocol = req.secure || req.get('x-forwarded-proto') === 'https' ? 'https' : 'https'; 
+        const host = req.get('host') === 'localhost:5000' ? 'localhost:5000' : 'tiye-backend.onrender.com';
+        
+        const fallbackUrl = `${protocol}://${host}/uploads/${file.filename}`;
+        
         console.warn(`⚠️ Using local fallback URL: ${fallbackUrl}`);
+        console.warn('   Note: This file will be lost if the Render server restarts or redeploys.');
+        
         return fallbackUrl;
     }
 };
