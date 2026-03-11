@@ -71,16 +71,6 @@ app.use('/messages', messageRoutes);
 app.use('/wallet', walletRoutes);
 app.use('/financial-settings', financialSettingsRoutes);
 
-app.get('/debug-uploads', (req: Request, res: Response) => {
-    const files = fs.existsSync(uploadsPath) ? fs.readdirSync(uploadsPath) : ['Directory missing'];
-    res.json({ 
-        cwd: process.cwd(), 
-        uploadsPath,
-        exists: fs.existsSync(uploadsPath),
-        files 
-    });
-});
-
 app.get('/', (req: Request, res: Response) => {
     // Last deploy trigger: 2026-03-09 00:40
     res.json({ status: "Taxi node backend running" });
