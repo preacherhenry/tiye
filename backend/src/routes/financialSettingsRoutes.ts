@@ -4,8 +4,9 @@ import { authenticateToken, requireFinancialAdmin } from '../middleware/authMidd
 
 const router = Router();
 
-// Restricted to Super Admin / Director
-router.get('/', authenticateToken, requireFinancialAdmin, getFinancialSettings);
+// Any authenticated user can READ settings (drivers need deposit limits)
+router.get('/', authenticateToken, getFinancialSettings);
+// Only Super Admin / Director can UPDATE settings
 router.put('/', authenticateToken, requireFinancialAdmin, updateFinancialSettings);
 
 export default router;
