@@ -7,10 +7,12 @@ import adminRoutes from './routes/adminRoutes';
 import driverRoutes from './routes/driverRoutes';
 import promotionRoutes from './routes/promotionRoutes';
 import placesRoutes from './routes/placesRoutes';
-import subscriptionRoutes from './routes/subscriptionRoutes';
+// import subscriptionRoutes from './routes/subscriptionRoutes';
 import settingsRoutes from './routes/settingsRoutes';
 import fareRoutes from './routes/fareRoutes';
 import messageRoutes from './routes/messageRoutes';
+import walletRoutes from './routes/walletRoutes';
+import financialSettingsRoutes from './routes/financialSettingsRoutes';
 
 dotenv.config();
 
@@ -55,20 +57,22 @@ app.use('/admin', adminRoutes);
 app.use('/driver', driverRoutes);
 app.use('/', promotionRoutes);
 app.use('/places', placesRoutes);
-app.use('/subscriptions', subscriptionRoutes);
+// app.use('/subscriptions', subscriptionRoutes);
 app.use('/fares', fareRoutes);
 app.use('/messages', messageRoutes);
+app.use('/wallet', walletRoutes);
+app.use('/financial-settings', financialSettingsRoutes);
 
 app.get('/', (req: Request, res: Response) => {
     // Last deploy trigger: 2026-03-09 00:40
     res.json({ status: "Taxi node backend running" });
 });
 
-import { syncAllDriverSubscriptions } from './controllers/subscriptionController';
+import { checkLowBalanceDrivers } from './controllers/driverController';
 
 // Start Background Jobs
-console.log('⏰ Starting 30s Subscription Sync (Quota Optimized)...');
-setInterval(syncAllDriverSubscriptions, 30000); // 30 seconds (reduced from 2s to save quota)
+console.log('⏰ Starting 1m Wallet Balance Check...');
+setInterval(checkLowBalanceDrivers, 60000); // 1 minute
 
 if (require.main === module) {
     app.listen(PORT, () => {
