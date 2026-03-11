@@ -19,6 +19,8 @@ import Subscriptions from './pages/Subscriptions';
 import Communications from './pages/Communications';
 import Fares from './pages/Fares';
 import Places from './pages/Places';
+import FinancialSettings from './pages/FinancialSettings';
+import WalletApprovals from './pages/WalletApprovals';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -71,6 +73,8 @@ const App: React.FC = () => {
             <Route path="subscriptions" element={<PermissionRoute permission="finance:dashboard"><Subscriptions /></PermissionRoute>} />
             <Route path="fares" element={<PermissionRoute permission="report:view_all"><Fares /></PermissionRoute>} />
             <Route path="places" element={<PermissionRoute permission="report:view_all"><Places /></PermissionRoute>} />
+            <Route path="financial-settings" element={<PermissionRoute permission="financial:manage"><FinancialSettings /></PermissionRoute>} />
+            <Route path="wallet-approvals" element={<PermissionRoute permission="finance:approve"><WalletApprovals /></PermissionRoute>} />
             <Route path="settings" element={<Settings />} />
           </Route>
           <Route

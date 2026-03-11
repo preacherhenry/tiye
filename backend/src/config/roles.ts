@@ -17,6 +17,7 @@ export type Permission =
     | 'system:technical'      // Technical system access (Developer/SysAdmin)
     | 'driver:approve'         // Approve driver applications (Driver Relations/CEO)
     | 'finance:view_docs'      // View sensitive financial docs (Finance/CEO)
+    | 'financial:manage'      // Administrative financial control (Super Admin/Director)
     | 'admin:dashboard';       // Basic admin dashboard access
 
 export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
@@ -25,12 +26,14 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
         'report:view_all',
         'finance:view_docs',
         'driver:approve',
+        'financial:manage',
         'admin:dashboard'
     ],
     director_ceo: [
         'report:view_all',
         'finance:view_docs',
         'driver:approve',
+        'financial:manage',
         'admin:dashboard'
     ],
     finance_manager: [

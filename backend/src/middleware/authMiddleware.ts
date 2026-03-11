@@ -67,3 +67,9 @@ export const requireSuperAdmin = (req: AuthRequest, res: Response, next: NextFun
     }
     next();
 };
+export const requireFinancialAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!hasPermission(req.user?.role, 'financial:manage')) {
+        return res.status(403).json({ success: false, message: 'Access denied. Financial administrative privileges required.' });
+    }
+    next();
+};

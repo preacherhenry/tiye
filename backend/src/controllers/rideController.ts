@@ -80,6 +80,12 @@ export const getRideDetails = async (req: Request, res: Response) => {
             ride.passenger_photo = fixPhotoUrl(ride.passenger_photo, req);
         }
 
+        // WALLET RULE: Drivers only see the fare amount AFTER the trip is completed.
+        if (userRole === 'driver' && userId === ride.driver_id && ride.status !== 'completed') {
+            delete ride.fare;
+            delete ride.estimated_fare;
+        }
+
         res.json({ success: true, ride });
     } catch (error: any) {
         res.json({ success: false, message: error.message });
@@ -200,10 +206,25 @@ export const getPendingRides = async (req: Request, res: Response) => {
 
         const allRides = querySnapshot.docs.map(doc => doc.data());
 
-        // 4. Filter out rejected rides and take first 3
+        // 4. Wallet Check: Drivers should only receive ride requests if balance is above min required
+        const minBalanceDoc = await db.collection('settings').doc('min_online_balance').get();
+        const minBalance = Number(minBalanceDoc.data()?.value || 5);
+        const walletBalance = driverDoc.data()?.wallet_balance || 0;
+
+        if (walletBalance < minBalance) {
+            console.log(`🚫 [GET PENDING RIDES] Driver ${driverId} balance (K${walletBalance}) too low (Min: K${minBalance}).`);
+            res.json({ success: true, rides: [], low_balance: true });
+            return;
+        }
+
+        // 5. Filter out rejected rides and take first 3, and HIDE FARE
         const availableRides = allRides
             .filter(ride => !rejectedRideIds.has(ride.id))
-            .slice(0, 3);
+            .slice(0, 3)
+            .map(ride => {
+                const { fare, estimated_fare, ...rideData } = ride;
+                return rideData; // Hide fare from pending list for drivers
+            });
 
         console.log(`✅ [GET PENDING RIDES] Found ${availableRides.length} ride(s) for driver.`);
         res.json({ success: true, rides: availableRides });
@@ -234,8 +255,14 @@ export const acceptRide = async (req: Request, res: Response) => {
             }
 
             const driver = driverDoc.data()!;
-            if (driver.subscription_status !== 'active') {
-                return { success: false, message: 'You must have an active subscription to accept rides.' };
+            
+            // WALLET CHECK replacing subscription check
+            const minBalanceDoc = await db.collection('settings').doc('min_online_balance').get();
+            const minBalance = Number(minBalanceDoc.data()?.value || 5);
+            const walletBalance = driver.wallet_balance || 0;
+
+            if (walletBalance < minBalance) {
+                return { success: false, message: `Your wallet balance (K${walletBalance}) is too low to accept rides. Minimum required is K${minBalance}.` };
             }
 
             if (!rideDoc.exists) {
@@ -365,10 +392,42 @@ export const updateRideStatus = async (req: Request, res: Response) => {
             // If trip ended, set driver back to online
             if ((status === 'completed' || status === 'cancelled') && ride.driver_id) {
                 const driverRef = db.collection('drivers').doc(String(ride.driver_id));
-                transaction.update(driverRef, {
+                const driverDoc = await transaction.get(driverRef);
+                const driverData = driverDoc.data();
+
+                const updateData: any = {
                     online_status: 'online',
                     last_seen_at: new Date().toISOString()
-                });
+                };
+
+                // AUTOMATIC TRIP DEDUCTION
+                if (status === 'completed') {
+                    const settingsRef = db.collection('settings');
+                    const deductionDoc = await settingsRef.doc('trip_deduction').get();
+                    const deductionAmount = Number(deductionDoc.data()?.value || 3);
+
+                    const currentBalance = driverData?.wallet_balance || 0;
+                    const newBalance = currentBalance - deductionAmount;
+
+                    updateData.wallet_balance = newBalance;
+
+                    // Record transaction
+                    const transRef = db.collection('wallet_transactions').doc();
+                    transaction.set(transRef, {
+                        id: transRef.id,
+                        driver_id: ride.driver_id,
+                        type: 'deduction',
+                        amount: deductionAmount,
+                        status: 'approved',
+                        trip_id: ride_id,
+                        description: `Trip Service Fee - Ride #${ride_id}`,
+                        created_at: new Date().toISOString()
+                    });
+
+                    console.log(`💸 Deducted K${deductionAmount} from Driver ${ride.driver_id}. New Balance: K${newBalance}`);
+                }
+
+                transaction.update(driverRef, updateData);
             }
         });
 

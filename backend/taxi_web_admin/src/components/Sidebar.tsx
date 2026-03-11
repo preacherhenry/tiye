@@ -60,7 +60,14 @@ const Sidebar: React.FC = () => {
 
         if (hasPermission(user?.role, 'finance:dashboard')) {
             items.push({ icon: BarChart3, label: 'Analytics', path: '/analytics' });
-            items.push({ icon: CreditCard, label: 'Subscriptions', path: '/subscriptions' });
+        }
+
+        if (hasPermission(user?.role, 'finance:approve')) {
+            items.push({ icon: CreditCard, label: 'Wallet Approvals', path: '/wallet-approvals' });
+        }
+
+        if (hasPermission(user?.role, 'financial:manage')) {
+            items.push({ icon: ShieldCheck, label: 'Financial Settings', path: '/financial-settings' });
         }
 
         if (hasPermission(user?.role, 'report:view_all')) {

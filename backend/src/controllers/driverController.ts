@@ -31,58 +31,35 @@ export const checkOfflineStatus = async () => {
     }
 };
 
-export const checkExpiredSubscriptions = async () => {
+export const checkLowBalanceDrivers = async () => {
     try {
-        const now = new Date().toISOString();
+        const minBalanceDoc = await db.collection('settings').doc('min_online_balance').get();
+        const minBalance = Number(minBalanceDoc.data()?.value || 5);
 
-        // 1. Mark driver subscriptions as expired in driver_subscriptions collection
-        try {
-            const expiredSubs = await db.collection('driver_subscriptions')
-                .where('status', '==', 'active')
-                .where('expiry_date', '<', now)
-                .get();
+        const lowBalanceDrivers = await db.collection('drivers')
+            .where('wallet_balance', '<', minBalance)
+            .where('online_status', '==', 'online')
+            .get();
 
-            if (!expiredSubs.empty) {
-                const batch = db.batch();
-                expiredSubs.docs.forEach(doc => {
-                    batch.update(doc.ref, { status: 'expired' });
+        if (!lowBalanceDrivers.empty) {
+            const batch = db.batch();
+            lowBalanceDrivers.docs.forEach(doc => {
+                batch.update(doc.ref, {
+                    online_status: 'offline',
+                    is_online: false
                 });
-                await batch.commit();
-            }
-        } catch (e) {
-            console.warn('⚠️  Firestore Index required for driver_subscriptions expiry check.');
-        }
-
-        // 2. Sync drivers collection status AND force them offline
-        try {
-            const expiredDrivers = await db.collection('drivers')
-                .where('subscription_status', '==', 'active')
-                .where('subscription_expiry', '<', now)
-                .get();
-
-            if (!expiredDrivers.empty) {
-                const batch = db.batch();
-                expiredDrivers.docs.forEach(doc => {
-                    batch.update(doc.ref, {
-                        subscription_status: 'expired',
-                        is_online: false,
-                        online_status: 'offline'
-                    });
-                });
-                await batch.commit();
-                console.log(`🕒 [Auto-Expiry] ${expiredDrivers.size} driver(s) subscriptions expired and forced offline.`);
-            }
-        } catch (e) {
-            console.warn('⚠️  Firestore Index required for drivers collection subscription sync.');
+            });
+            await batch.commit();
+            console.log(`🕒 [Wallet-Check] ${lowBalanceDrivers.size} driver(s) forced offline due to low wallet balance (< K${minBalance}).`);
         }
     } catch (error) {
-        console.error('Error checking expired subscriptions:', error);
+        console.error('Error checking low balance drivers:', error);
     }
 };
 
 // Start background tasks
 setInterval(checkOfflineStatus, 30000); // Every 30 seconds
-setInterval(checkExpiredSubscriptions, 60000); // Every minute
+setInterval(checkLowBalanceDrivers, 60000); // Every minute
 
 export const heartbeat = async (req: Request, res: Response) => {
     const userId = (req as any).user?.id;
@@ -105,18 +82,22 @@ export const heartbeat = async (req: Request, res: Response) => {
 
         const isApproved = user.status === 'approved';
         const isSuspended = user.status === 'suspended';
-        const hasActiveSub = driver.subscription_status === 'active';
         const isOnTrip = driver.online_status === 'on_trip';
+
+        // WALLET BALANCE CHECK
+        const minBalanceDoc = await db.collection('settings').doc('min_online_balance').get();
+        const minBalance = Number(minBalanceDoc.data()?.value || 5);
+        const hasEnoughBalance = (driver.wallet_balance || 0) >= minBalance;
 
         let newStatus = 'offline';
         let newIsOnline = false;
 
-        // ONLY allow online if approved AND not suspended
+        // ONLY allow online if approved AND not suspended AND enough balance
         if (isApproved && !isSuspended) {
             if (isOnTrip) {
                 newStatus = 'on_trip';
                 newIsOnline = true;
-            } else if (hasActiveSub) {
+            } else if (hasEnoughBalance) {
                 newStatus = 'online';
                 newIsOnline = true;
             }

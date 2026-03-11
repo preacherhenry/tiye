@@ -110,7 +110,7 @@ const DriverProfile: React.FC = () => {
         </div>
     );
 
-    const { driver, stats, trips, activeTrip, subscriptions = [] } = data;
+    const { driver, stats, trips, activeTrip, subscriptions = [], wallet = { balance: 0, transactions: [] } } = data;
 
     return (
         <div className="space-y-8 pb-10">
@@ -241,11 +241,11 @@ const DriverProfile: React.FC = () => {
                                 <CheckCircle2 className="w-8 h-8 text-green-500 opacity-20" />
                             </div>
                         </div>
-                        <div className="glass p-6 rounded-[2rem] border border-white/5">
-                            <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-4">Cancellations</p>
+                        <div className="glass p-6 rounded-[2rem] border border-white/5 bg-primary/10">
+                            <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-4">Wallet Balance</p>
                             <div className="flex items-center justify-between">
-                                <h3 className="text-3xl font-black tracking-tighter text-red-500">{stats.cancelledTrips}</h3>
-                                <XCircle className="w-8 h-8 text-red-500 opacity-20" />
+                                <h3 className="text-3xl font-black tracking-tighter text-primary">K {Number(driver.wallet_balance || 0).toLocaleString()}</h3>
+                                <CreditCard className="w-8 h-8 text-primary opacity-20" />
                             </div>
                         </div>
                     </div>
@@ -271,6 +271,71 @@ const DriverProfile: React.FC = () => {
                             <p className="font-bold text-xl text-primary">{driver.plate_number || 'N/A'}</p>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            {/* Wallet Transactions History */}
+            <div className="glass p-8 rounded-[2rem] border border-white/5 bg-black/20">
+                <div className="flex justify-between items-center mb-10">
+                    <div>
+                        <h3 className="text-xl font-bold flex items-center text-primary">
+                            <CreditCard className="w-5 h-5 mr-3" /> Wallet Transaction History
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-1 uppercase font-black tracking-widest">Financial audit trail for this chauffeur</p>
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full">
+                        <thead>
+                            <tr className="text-left text-[10px] font-black text-gray-600 uppercase tracking-[0.2em] border-b border-white/5">
+                                <th className="pb-6">Date</th>
+                                <th className="pb-6">Type</th>
+                                <th className="pb-6">Description</th>
+                                <th className="pb-6">Amount</th>
+                                <th className="pb-6">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                            {wallet.transactions.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="py-12 text-center text-gray-600 font-bold uppercase tracking-widest text-[10px] italic">
+                                        No financial transactions recorded.
+                                    </td>
+                                </tr>
+                            ) : wallet.transactions.map((t: any) => (
+                                <tr key={t.id} className="group hover:bg-white/[0.02] transition-colors">
+                                    <td className="py-4 whitespace-nowrap">
+                                        <p className="font-bold text-xs">{new Date(t.created_at).toLocaleDateString()}</p>
+                                    </td>
+                                    <td className="py-4">
+                                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                                            t.type === 'deposit' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
+                                        }`}>
+                                            {t.type}
+                                        </span>
+                                    </td>
+                                    <td className="py-4 text-xs font-medium text-gray-400">
+                                        {t.description || (t.type === 'deduction' ? 'Trip Service Fee' : 'Wallet Top-up')}
+                                    </td>
+                                    <td className="py-4">
+                                        <span className={`font-black tracking-tighter ${
+                                            t.type === 'deposit' ? 'text-green-500' : 'text-red-500'
+                                        }`}>
+                                            {t.type === 'deposit' ? '+' : '-'} K {t.amount}
+                                        </span>
+                                    </td>
+                                    <td className="py-4">
+                                        <span className={`text-[10px] font-black uppercase ${
+                                            t.status === 'approved' ? 'text-green-500' : t.status === 'pending' ? 'text-yellow-500' : 'text-red-500'
+                                        }`}>
+                                            {t.status}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
