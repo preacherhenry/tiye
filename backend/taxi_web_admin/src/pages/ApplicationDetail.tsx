@@ -23,6 +23,7 @@ const ApplicationDetail: React.FC = () => {
     const [rejectReason, setRejectReason] = useState('');
     const [showRejectModal, setShowRejectModal] = useState(false);
     const [rejectType, setRejectType] = useState<any>(null); // { type: 'doc' | 'app', id?: number }
+    const [vehicleClass, setVehicleClass] = useState('Regular');
 
     useEffect(() => {
         fetchDetails();
@@ -60,7 +61,9 @@ const ApplicationDetail: React.FC = () => {
     const handleApproveApp = async () => {
         setProcessing(true);
         try {
-            const res = await api.post(`/admin/applications/${id}/approve`);
+            const res = await api.post(`/admin/applications/${id}/approve`, {
+                vehicle_class: vehicleClass
+            });
             if (res.data.success) {
                 navigate('/applications');
             } else {
@@ -161,6 +164,20 @@ const ApplicationDetail: React.FC = () => {
                             <div><p className="text-xs text-gray-500 uppercase font-black mb-1">Plate Number</p><p className="font-bold text-lg">{application.vehicle_registration_number}</p></div>
                             <div><p className="text-xs text-gray-500 uppercase font-black mb-1">Color</p><p className="font-medium">{application.vehicle_color}</p></div>
                             <div><p className="text-xs text-gray-500 uppercase font-black mb-1">Exp. Years</p><p className="font-medium">{application.driving_experience_years} Years</p></div>
+                            
+                            <div className="pt-4 border-t border-white/5">
+                                <p className="text-xs text-primary uppercase font-black mb-2">Assign Vehicle Class</p>
+                                <select 
+                                    className="w-full bg-surface border border-white/10 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-white"
+                                    value={vehicleClass}
+                                    onChange={(e) => setVehicleClass(e.target.value)}
+                                >
+                                    <option value="Regular">Regular (Standard)</option>
+                                    <option value="Comfort">Comfort (Newer)</option>
+                                    <option value="Comfort+">Comfort+ (Premium)</option>
+                                </select>
+                                <p className="text-[10px] text-gray-500 mt-2 italic">Class must be assigned by Admin after photo verification.</p>
+                            </div>
                         </div>
                     </div>
                 </div>

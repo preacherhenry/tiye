@@ -96,7 +96,12 @@ export const verifyDocument = async (req: Request, res: Response) => {
 
 export const approveApplication = async (req: Request, res: Response) => {
     const { id } = req.params;
+    const { vehicle_class } = req.body;
     const adminId = (req as any).user?.id || null;
+
+    if (!vehicle_class) {
+        return res.json({ success: false, message: 'Vehicle class is required for approval' });
+    }
 
     try {
         const result = await db.runTransaction(async (transaction) => {
@@ -142,6 +147,7 @@ export const approveApplication = async (req: Request, res: Response) => {
                 car_model: app.vehicle_type + ' ' + app.vehicle_registration_number,
                 car_color: app.vehicle_color,
                 plate_number: app.vehicle_registration_number,
+                vehicle_class: vehicle_class,
                 rating: 5.0,
                 online_status: 'offline',
                 is_online: false,

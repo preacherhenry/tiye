@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { db } from '../config/firebase';
 import { isLocationInServiceArea } from '../config/serviceArea';
+import { getDistanceBetween } from '../utils/geo';
 
 const fixPhotoUrl = (url: string | null, req: Request) => {
     if (!url) return null;
@@ -96,7 +97,7 @@ export const requestRide = async (req: Request, res: Response) => {
     const {
         passenger_id, pickup, destination, fare, distance,
         pickup_lat, pickup_lng, dropoff_lat, dropoff_lng,
-        promoId, is_manual_destination
+        promoId, is_manual_destination, vehicle_class
     } = req.body;
 
     const isManual = Boolean(is_manual_destination);
@@ -148,6 +149,7 @@ export const requestRide = async (req: Request, res: Response) => {
             dest_lat: dropoff_lat || 0,
             dest_lng: dropoff_lng || 0,
             is_manual_destination: isManual,
+            vehicle_class: vehicle_class || 'Regular',
             status: 'pending',
             created_at: new Date().toISOString()
         };
@@ -206,7 +208,7 @@ export const getPendingRides = async (req: Request, res: Response) => {
 
         const allRides = querySnapshot.docs.map(doc => doc.data());
 
-        // 4. Wallet Check: Drivers should only receive ride requests if balance is above min required
+        // 4. Wallet Check
         const minBalanceDoc = await db.collection('settings').doc('min_online_balance').get();
         const minBalance = Number(minBalanceDoc.data()?.value || 5);
         const walletBalance = driverDoc.data()?.wallet_balance || 0;
@@ -217,17 +219,36 @@ export const getPendingRides = async (req: Request, res: Response) => {
             return;
         }
 
-        // 5. Filter out rejected rides and take first 3, and HIDE FARE
+        const driverClass = driverDoc.data()?.vehicle_class || 'Regular';
+        const driverLat = driverDoc.data()?.current_lat;
+        const driverLng = driverDoc.data()?.current_lng;
+
+        // 5. Filter by class, rejection, and calculate distance
         const availableRides = allRides
-            .filter(ride => !rejectedRideIds.has(ride.id))
-            .slice(0, 3)
+            .filter(ride => {
+                const isMatch = (ride.vehicle_class === driverClass);
+                const isNotRejected = !rejectedRideIds.has(ride.id);
+                return isMatch && isNotRejected;
+            })
             .map(ride => {
+                let dist = 999;
+                if (driverLat && driverLng && ride.pickup_lat && ride.pickup_lng) {
+                    dist = getDistanceBetween(
+                        Number(driverLat), Number(driverLng),
+                        Number(ride.pickup_lat), Number(ride.pickup_lng)
+                    );
+                }
+                
                 const { fare, estimated_fare, ...rideData } = ride;
-                return rideData; // Hide fare from pending list for drivers
+                return { ...rideData, distance_to_driver: dist };
             });
 
-        console.log(`✅ [GET PENDING RIDES] Found ${availableRides.length} ride(s) for driver.`);
-        res.json({ success: true, rides: availableRides });
+        // 6. Sort by proximity and take first 3
+        availableRides.sort((a, b) => (a.distance_to_driver || 999) - (b.distance_to_driver || 999));
+        const limitedRides = availableRides.slice(0, 3);
+
+        console.log(`✅ [GET PENDING RIDES] Found ${limitedRides.length} ride(s) for driver ${driverId} in class ${driverClass}.`);
+        res.json({ success: true, rides: limitedRides });
     } catch (error: any) {
         console.error('❌ [GET PENDING RIDES] Error:', error.message);
         res.json({ success: false, message: error.message });

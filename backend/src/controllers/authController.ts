@@ -321,6 +321,12 @@ export const applyDriver = async (req: Request, res: Response) => {
         const nrcFront = files?.['nrc_front'] ? await uploadToFirebase(files['nrc_front'][0], 'documents', req) : '';
         const nrcBack = files?.['nrc_back'] ? await uploadToFirebase(files['nrc_back'][0], 'documents', req) : '';
 
+        const carFront = files?.['car_front'] ? await uploadToFirebase(files['car_front'][0], 'vehicles', req) : '';
+        const carBack = files?.['car_back'] ? await uploadToFirebase(files['car_back'][0], 'vehicles', req) : '';
+        const carSideLeft = files?.['car_side_left'] ? await uploadToFirebase(files['car_side_left'][0], 'vehicles', req) : '';
+        const carSideRight = files?.['car_side_right'] ? await uploadToFirebase(files['car_side_right'][0], 'vehicles', req) : '';
+        const carInterior = files?.['car_interior'] ? await uploadToFirebase(files['car_interior'][0], 'vehicles', req) : '';
+
         // 5. Create Application
         const appRef = db.collection('driver_applications').doc();
         const applicationId = appRef.id;
@@ -346,6 +352,11 @@ export const applyDriver = async (req: Request, res: Response) => {
             nrc_front: nrcFront,
             nrc_back: nrcBack,
             profile_photo: profilePhoto,
+            car_front: carFront,
+            car_back: carBack,
+            car_side_left: carSideLeft,
+            car_side_right: carSideRight,
+            car_interior: carInterior,
             created_at: new Date().toISOString()
         });
 
@@ -355,7 +366,12 @@ export const applyDriver = async (req: Request, res: Response) => {
             { type: 'license_back', url: licenseBack },
             { type: 'nrc_front', url: nrcFront },
             { type: 'nrc_back', url: nrcBack },
-            { type: 'profile_photo', url: profilePhoto }
+            { type: 'profile_photo', url: profilePhoto },
+            { type: 'car_front', url: carFront },
+            { type: 'car_back', url: carBack },
+            { type: 'car_side_left', url: carSideLeft },
+            { type: 'car_side_right', url: carSideRight },
+            { type: 'car_interior', url: carInterior }
         ];
 
         for (const doc of docTypes) {

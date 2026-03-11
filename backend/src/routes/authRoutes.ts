@@ -23,7 +23,12 @@ router.post('/apply-driver', upload.fields([
     { name: 'license_back', maxCount: 1 },
     { name: 'nrc_front', maxCount: 1 },
     { name: 'nrc_back', maxCount: 1 },
-    { name: 'profile_photo', maxCount: 1 }
+    { name: 'profile_photo', maxCount: 1 },
+    { name: 'car_front', maxCount: 1 },
+    { name: 'car_back', maxCount: 1 },
+    { name: 'car_side_left', maxCount: 1 },
+    { name: 'car_side_right', maxCount: 1 },
+    { name: 'car_interior', maxCount: 1 }
 ]), applyDriver);
 router.post('/login', login);
 router.post('/logout', authenticateToken, logout);
