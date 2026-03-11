@@ -484,7 +484,8 @@ export const getUserProfile = async (req: Request, res: Response) => {
                 const driver = driverDoc.data();
                 if (driver) {
                     driverInfo = {
-                        subscription_status: driver.subscription_status,
+                        // FORCE ACTIVE for transition to wallet model (stops legacy app auto-logout)
+                        subscription_status: 'active',
                         subscription_expiry: driver.subscription_expiry
                     };
                 }
