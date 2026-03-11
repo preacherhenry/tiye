@@ -1,34 +1,19 @@
 import { Request, Response } from 'express';
-import { db, storage } from '../config/firebase';
-import fs from 'fs';
+import { db } from '../config/firebase';
 import { hasPermission } from '../config/roles';
+import { uploadFile } from '../utils/storage';
 
 export const requestDeposit = async (req: Request, res: Response) => {
     const { amount } = req.body;
     const driver_id = (req as any).user?.id || req.body.driver_id;
-    const file = req.file;
+    const file = req.file as Express.Multer.File;
 
     if (!driver_id || !amount || !file) {
         return res.json({ success: false, message: 'Driver ID, Amount and payment proof are required' });
     }
 
     try {
-        const bucket = storage.bucket();
-        const destination = `deposits/${file.filename}`;
-        const fileRef = bucket.file(destination);
-
-        let proof_photo: string;
-        try {
-            await fileRef.save(fs.readFileSync(file.path), {
-                metadata: { contentType: file.mimetype },
-                public: true
-            });
-            proof_photo = `https://storage.googleapis.com/${bucket.name}/${destination}`;
-        } catch (error: any) {
-            console.warn('⚠️ Firebase deposit upload failed, using local fallback:', error.message);
-            const host = req.get('host') || 'localhost:5000';
-            proof_photo = `${req.protocol}://${host}/uploads/${file.filename}`;
-        }
+        const proof_photo = await uploadFile(file, 'deposits', req);
 
         const transRef = db.collection('wallet_transactions').doc();
         await transRef.set({

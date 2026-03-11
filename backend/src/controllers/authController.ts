@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { db, storage } from '../config/firebase';
+import { db } from '../config/firebase';
+import { uploadFile } from '../utils/storage';
 import dotenv from 'dotenv';
 import fs from 'fs';
 
@@ -291,23 +292,7 @@ export const applyDriver = async (req: Request, res: Response) => {
         const userId = newUserRef.id;
 
         const uploadToFirebase = async (file: Express.Multer.File, folder: string, req: Request) => {
-            const bucket = storage.bucket();
-            const destination = `${folder}/${file.filename}`;
-            const fileRef = bucket.file(destination);
-            
-            try {
-                // Try to upload to Firebase
-                await fileRef.save(fs.readFileSync(file.path), {
-                    metadata: { contentType: file.mimetype },
-                    public: true
-                });
-                return `https://storage.googleapis.com/${bucket.name}/${destination}`;
-            } catch (error: any) {
-                console.warn(`⚠️ Firebase upload failed for ${file.filename}:`, error.message);
-                // Fallback to local URL
-                const host = req.get('host') || 'localhost:5000';
-                return `${req.protocol}://${host}/uploads/${file.filename}`;
-            }
+            return await uploadFile(file, folder, req);
         };
 
         const profilePhoto = files?.['profile_photo']
@@ -410,22 +395,7 @@ export const uploadProfilePhoto = async (req: Request, res: Response) => {
     }
 
     try {
-        const bucket = storage.bucket();
-        const destination = `profiles/${req.file.filename}`;
-        const fileRef = bucket.file(destination);
-
-        let photoUrl: string;
-        try {
-            await fileRef.save(fs.readFileSync(req.file.path), {
-                metadata: { contentType: req.file.mimetype },
-                public: true
-            });
-            photoUrl = `https://storage.googleapis.com/${bucket.name}/${destination}`;
-        } catch (error: any) {
-            console.warn('⚠️ Firebase upload failed, using local fallback:', error.message);
-            const host = req.get('host') || 'localhost:5000';
-            photoUrl = `${req.protocol}://${host}/uploads/${req.file.filename}`;
-        }
+        const photoUrl = await uploadFile(req.file as Express.Multer.File, 'profiles', req);
 
         await db.collection('users').doc(userId).update({
             profile_photo: photoUrl
