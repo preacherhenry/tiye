@@ -62,11 +62,16 @@ export const getWalletHistory = async (req: Request, res: Response) => {
 
     try {
         let query = db.collection('wallet_transactions')
-            .where('driver_id', '==', String(targetDriverId))
-            .orderBy('created_at', 'desc');
+            .where('driver_id', '==', String(targetDriverId));
+            // .orderBy('created_at', 'desc'); // Requires composite index with where clause
 
         const snapshot = await query.get();
-        let transactions = snapshot.docs.map(doc => doc.data());
+        let docs = [...snapshot.docs];
+        
+        // Sort in memory to avoid index requirements
+        docs.sort((a, b) => new Date(b.data().created_at).getTime() - new Date(a.data().created_at).getTime());
+
+        let transactions = docs.map(doc => doc.data());
 
         // DRIVER VIEW RULE: Must NOT see trip deductions.
         if (userRole === 'driver') {
@@ -103,10 +108,14 @@ export const adminGetPendingDeposits = async (req: Request, res: Response) => {
         const snapshot = await db.collection('wallet_transactions')
             .where('type', '==', 'deposit')
             .where('status', '==', 'pending')
-            .orderBy('created_at', 'desc')
+            // .orderBy('created_at', 'desc') // Requires composite index
             .get();
 
-        const deposits = await Promise.all(snapshot.docs.map(async (doc) => {
+        let docs = [...snapshot.docs];
+        // Sort in memory
+        docs.sort((a, b) => new Date(b.data().created_at).getTime() - new Date(a.data().created_at).getTime());
+
+        const deposits = await Promise.all(docs.map(async (doc) => {
             const data = doc.data();
             const userDoc = await db.collection('users').doc(data.driver_id).get();
             const userData = userDoc.data() || {};
