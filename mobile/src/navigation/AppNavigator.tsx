@@ -10,14 +10,14 @@ import PaymentsScreen from '../screens/sidebar/PaymentsScreen';
 import PromotionsScreen from '../screens/sidebar/PromotionsScreen';
 import SettingsScreen from '../screens/sidebar/SettingsScreen';
 import HelpSupportScreen from '../screens/sidebar/HelpSupportScreen';
+import WalletScreen from '../screens/driver/sidebar/WalletScreen';
+import WalletHistoryScreen from '../screens/driver/sidebar/WalletHistoryScreen';
 import { PersonalInformationScreen } from '../screens/sidebar/PersonalInformationScreen';
 import { RideDetailsScreen } from '../screens/sidebar/RideDetailsScreen';
 import DriverRidesScreen from '../screens/driver/sidebar/DriverRidesScreen';
 import DriverEarningsScreen from '../screens/driver/sidebar/DriverEarningsScreen';
 import DriverSettingsScreen from '../screens/driver/sidebar/DriverSettingsScreen';
 import DriverSupportScreen from '../screens/driver/sidebar/DriverSupportScreen';
-import SubscriptionScreen from '../screens/driver/sidebar/SubscriptionScreen';
-import { SubscriptionHistoryScreen } from '../screens/driver/sidebar/SubscriptionHistoryScreen';
 import DriverApplyScreen from '../screens/auth/DriverApplyScreen';
 
 import { useAuth } from '../context/AuthContext';
@@ -43,8 +43,8 @@ export const AppNavigator = () => {
                             <Stack.Screen name="DriverEarnings" component={DriverEarningsScreen} />
                             <Stack.Screen name="DriverSettings" component={DriverSettingsScreen} />
                             <Stack.Screen name="DriverSupport" component={DriverSupportScreen} />
-                            <Stack.Screen name="Subscription" component={SubscriptionScreen} />
-                            <Stack.Screen name="SubscriptionHistory" component={SubscriptionHistoryScreen} />
+                            <Stack.Screen name="Wallet" component={WalletScreen} />
+                            <Stack.Screen name="WalletHistory" component={WalletHistoryScreen} />
 
                         </>
                     ) : (

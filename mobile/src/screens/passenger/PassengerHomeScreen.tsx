@@ -14,6 +14,12 @@ import { ActiveTripSummary } from '../../components/ActiveTripSummary';
 
 const { width, height } = Dimensions.get('window');
 
+const VEHICLE_CLASSES = [
+    { id: 'Regular', name: 'Regular', description: 'Standard rides', multiplier: 1, icon: 'car-outline' },
+    { id: 'Comfort', name: 'Comfort', description: 'Newer cars', multiplier: 1.25, icon: 'car-sport-outline' },
+    { id: 'Comfort+', name: 'Comfort+', description: 'Premium luxury', multiplier: 1.5, icon: 'star-outline' }
+];
+
 
 
 // Reusable Menu Item Component
@@ -38,6 +44,7 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
     const [rideInfo, setRideInfo] = useState<any>(null);
     const [rideId, setRideId] = useState<any>(null);
     const [appliedPromo, setAppliedPromo] = useState<any>(null);
+    const [selectedVehicleClass, setSelectedVehicleClass] = useState('Regular');
     const [promoInput, setPromoInput] = useState('');
     const [isApplyingPromo, setIsApplyingPromo] = useState(false);
     const [showPromoInput, setShowPromoInput] = useState(false);
@@ -669,19 +676,18 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                         finalFare = Math.ceil(calcFare);
                     }
 
-                    setFare(finalFare);
-                    setIsManualDestination(false);
-                    setRideStatus('preview');
+                    // Update state first
                     setPickupCoords(p);
                     setDestCoords(d);
+                    setRouteCoords(route.geometry.coordinates.map(([lng, lat]: any) => ({ latitude: lat, longitude: lng })));
+                    setDistance(distKm.toFixed(1) as any);
+                    setFare(finalFare);
+                    setIsManualDestination(false);
+
+                    // Then change status to trigger side effects
+                    setRideStatus('preview');
 
                     console.log(`🎯 Moving to Preview. Fare: K${finalFare}, Distance: ${distKm}km`);
-
-                    mapRef.current?.fitToCoordinates([
-                        { latitude: p.latitude, longitude: p.longitude },
-                        { latitude: d.latitude, longitude: d.longitude }
-                    ], { edgePadding: { top: 50, right: 50, bottom: 300, left: 50 } });
-
                     return true;
                 }
                 console.log("❌ OSRM returned no routes.");
@@ -738,6 +744,24 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
         const interval = setInterval(fetchDriverRoute, 10000);
         return () => clearInterval(interval);
     }, [rideStatus, driverLoc, pickup, destination, pickupCoords, destCoords]);
+    // 3b. AUTO-ZOOM TO ROUTE (When entering preview or coords change)
+    useEffect(() => {
+        if (rideStatus === 'preview' && pickupCoords && destCoords) {
+            const timer = setTimeout(() => {
+                console.log("📍 [AUTO-ZOOM] Fitting map to coordinates...");
+                if (mapRef.current) {
+                    mapRef.current.fitToCoordinates([
+                        { latitude: pickupCoords.latitude, longitude: pickupCoords.longitude },
+                        { latitude: destCoords.latitude, longitude: destCoords.longitude }
+                    ], {
+                        edgePadding: { top: 100, right: 60, bottom: 420, left: 60 },
+                        animated: true
+                    });
+                }
+            }, 800);
+            return () => clearTimeout(timer);
+        }
+    }, [rideStatus, pickupCoords?.latitude, destCoords?.latitude]);
 
     const handleApplyPromo = async () => {
         if (!promoInput.trim()) return;
@@ -762,14 +786,18 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
     };
 
     const calculateDiscountedFare = () => {
-        if (!appliedPromo) return fare;
+        const baseFare = fare;
+        const classMultiplier = VEHICLE_CLASSES.find(c => c.id === selectedVehicleClass)?.multiplier || 1;
+        const adjustedFare = baseFare * classMultiplier;
+
+        if (!appliedPromo) return adjustedFare.toFixed(2);
         let discount = 0;
         if (appliedPromo.discount_type === 'percentage') {
-            discount = (fare * appliedPromo.discount_value) / 100;
+            discount = (adjustedFare * appliedPromo.discount_value) / 100;
         } else {
             discount = appliedPromo.discount_value;
         }
-        return Math.max(0, fare - discount).toFixed(2);
+        return Math.max(0, adjustedFare - discount).toFixed(2);
     };
 
     const confirmRequest = async () => {
@@ -786,7 +814,8 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                 dropoff_lat: isManualDestination ? null : destCoords?.latitude,
                 dropoff_lng: isManualDestination ? null : destCoords?.longitude,
                 promoId: isManualDestination ? null : appliedPromo?.id,
-                is_manual_destination: isManualDestination
+                is_manual_destination: isManualDestination,
+                vehicle_class: selectedVehicleClass
             });
             if (res.data.success) {
                 setRideId(res.data.rideId);
@@ -887,410 +916,453 @@ export const PassengerHomeScreen = ({ navigation }: any) => {
                 </TouchableOpacity>
             </View>
 
-            {/* Main Content Area */}
-            <View style={styles.contentContainer}>
-                <ScrollView
-                    style={{ flex: 1 }}
-                    contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
-                    showsVerticalScrollIndicator={false}
-                >
-                    {/* 1. BOOKING OR ACTIVE SUMMARY */}
-                    <View style={{ marginTop: 80 }}>
-                        {(rideStatus === 'idle' || rideStatus === 'cancelled') ? (
-                            <View style={styles.searchBox}>
-                                {/* ... existing search box code ... */}
-                                {/* Current Location Label - Now Clickable */}
-                                <TouchableOpacity
-                                    style={styles.compactLocationRow}
-                                    onPress={() => {
-                                        setActiveInput('pickup');
-                                        if (!pickupCoords) setPickup('Locating you...'); // Hint for re-geocoding
-                                    }}
-                                >
-                                    <Ionicons name="location-sharp" size={14} color={Colors.success} />
-                                    {activeInput === 'pickup' ? (
-                                        <TextInput
-                                            style={styles.pickupEditInput}
-                                            value={pickup === 'Locating you...' ? '' : pickup}
-                                            onChangeText={(text) => handleSearch(text, 'pickup')}
-                                            placeholder="Enter pickup point"
-                                            placeholderTextColor={Colors.gray}
-                                            autoFocus
-                                            onBlur={() => setActiveInput(null)}
-                                        />
-                                    ) : (
-                                        <Text style={styles.compactLocationText} numberOfLines={1}>
-                                            {pickup || 'Locating you...'}
-                                        </Text>
-                                    )}
-                                </TouchableOpacity>
-
-                                {/* Destination Input Container - Now Primary */}
-                                <View style={{ marginTop: 10, zIndex: activeInput === 'destination' ? 100 : 1 }}>
-                                    <View style={styles.inputWrapper}>
-                                        <Ionicons name="search" size={20} color={Colors.gray} style={styles.inputIcon} />
-                                        <TextInput
-                                            placeholder="Where to?"
-                                            style={styles.compactInput}
-                                            value={destination}
-                                            onChangeText={(text) => handleSearch(text, 'destination')}
-                                            placeholderTextColor={Colors.gray}
-                                            onFocus={() => {
-                                                setActiveInput('destination');
-                                                if (destination) handleSearch(destination, 'destination');
-                                            }}
-                                        />
-                                    </View>
-
-                                    {/* Conditional Search Button */}
-                                    {(activeInput === 'destination' || (activeInput === 'pickup' && destination.length > 0 && pickup.length > 0) || (destination.length > 0 && pickup.length > 0)) && (
-                                        <TouchableOpacity
-                                            style={styles.findRideBtn}
-                                            onPress={handleRequestPreview}
-                                        >
-                                            <Text style={styles.findRideBtnText}>Find Ride</Text>
-                                            <Ionicons name="arrow-forward" size={18} color="black" />
-                                        </TouchableOpacity>
-                                    )}
-                                    {activeInput === 'destination' && (
-                                        <View style={styles.autocompleteOverlay}>
-                                            <ScrollView
-                                                style={styles.autocompleteDropdown}
-                                                contentContainerStyle={{ flexGrow: 1 }}
-                                                keyboardShouldPersistTaps="handled"
-                                                showsVerticalScrollIndicator={true}
-                                            >
-                                                {filteredPlaces.length > 0 ? (
-                                                    filteredPlaces.map((place, idx) => (
-                                                        <TouchableOpacity
-                                                            key={idx}
-                                                            style={styles.autocompleteItem}
-                                                            onPress={() => selectPlace(place)}
-                                                        >
-                                                            <Ionicons name="location-sharp" size={18} color={Colors.primary} />
-                                                            <View style={{ marginLeft: 10 }}>
-                                                                <Text style={styles.placeName}>{place.name}</Text>
-                                                                {place.description && <Text style={styles.placeCategory}>({place.description})</Text>}
-                                                            </View>
-                                                        </TouchableOpacity>
-                                                    ))
-                                                ) : (
-                                                    destination.trim().length > 0 && (
-                                                        <TouchableOpacity
-                                                            style={styles.noResultItem}
-                                                            onPress={() => selectPlace({ name: destination, description: 'Manual' } as any)}
-                                                        >
-                                                            <Ionicons name="search-outline" size={20} color={Colors.gray} />
-                                                            <View style={{ marginLeft: 10 }}>
-                                                                <Text style={styles.noResultText}>No saved location found</Text>
-                                                                <Text style={[styles.placeCategory, { color: Colors.primary, marginTop: 2 }]}>Tap to use "{destination}" as destination</Text>
-                                                            </View>
-                                                        </TouchableOpacity>
-                                                    )
-                                                )}
-                                            </ScrollView>
-                                        </View>
-                                    )}
-                                </View>
-                            </View>
+            <View style={styles.contentContainer} pointerEvents="box-none">
+                {/* 
+                    CRITICAL: ScrollView blocks map interaction even if children don't.
+                    We only use ScrollView in 'idle'/'cancelled' states (where map is hidden by gray bg).
+                    In active states, we use a pass-through View to allow tapping the Map background.
+                */}
+                {(rideStatus === 'idle' || rideStatus === 'cancelled') ? (
+                    <ScrollView
+style={{ flex: 1 }}
+                contentContainerStyle={{ flexGrow: 1, paddingBottom: 40 }}
+                showsVerticalScrollIndicator={false}
+>
+                {/* ... nested content ... */}
+                {/* 1. BOOKING OR ACTIVE SUMMARY */}
+                <View style={{ marginTop: 80 }}>
+                    <View style={styles.searchBox}>
+                        {/* Current Location Label - Now Clickable */}
+                        <TouchableOpacity
+style={styles.compactLocationRow}
+                        onPress={() => {
+                            setActiveInput('pickup');
+                        if (!pickupCoords) setPickup('Locating you...'); // Hint for re-geocoding
+}}
+>
+                        <Ionicons name="location-sharp" size={14} color={Colors.success} />
+                        {activeInput === 'pickup' ? (
+                            <TextInput
+style={styles.pickupEditInput}
+                        value={pickup === 'Locating you...' ? '' : pickup}
+                        onChangeText={(text) => handleSearch(text, 'pickup')}
+                        placeholder="Enter pickup point"
+                        placeholderTextColor={Colors.gray}
+                        autoFocus
+                        onBlur={() => setActiveInput(null)}
+/>
                         ) : (
-                            /* Ride Summary Island — Only shows when a ride is active/searching/etc */
-                            /* HIDDEN IN PREVIEW MODE */
-                            rideStatus !== 'preview' && (
-                                <ActiveTripSummary
-                                    pickup={pickup || rideInfo?.pickup_location || '...'}
-                                    destination={destination || rideInfo?.destination || '...'}
-                                    status={rideStatus}
-                                    driverName={rideInfo?.driver_name}
-                                    carPlate={rideInfo?.car_plate}
-                                    fare={appliedPromo ? calculateDiscountedFare() : (fare || rideInfo?.fare)}
-                                    onDetailsPress={() => setIsTrackingDetailVisible(true)}
-                                />
-                            )
-                        )}
+                        <Text style={styles.compactLocationText} numberOfLines={1}>
+                            {pickup || 'Locating you...'}
+                            </Text>
+)}
+                        </TouchableOpacity>
+                    {/* Destination Input Container - Now Primary */}
+                    <View style={{ marginTop: 10, zIndex: activeInput === 'destination' ? 100 : 1 }}>
+                        <View style={styles.inputWrapper}>
+                            <Ionicons name="search" size={20} color={Colors.gray} style={styles.inputIcon} />
+                            <TextInput
+placeholder="Where to?"
+                            style={styles.compactInput}
+                            value={destination}
+                            onChangeText={(text) => handleSearch(text, 'destination')}
+                            placeholderTextColor={Colors.gray}
+                            onFocus={() => {
+                                setActiveInput('destination');
+                            if (destination) handleSearch(destination, 'destination');
+}}
+/>
+                            </View>
+                        {/* Conditional Search Button */}
+                        {(activeInput === 'destination' || (activeInput === 'pickup' && destination.length > 0 && pickup.length > 0) || (destination.length > 0 && pickup.length > 0)) && (
+                            <TouchableOpacity
+style={styles.findRideBtn}
+                        onPress={handleRequestPreview}
+>
+                        <Text style={styles.findRideBtnText}>Find Ride</Text>
+                        <Ionicons name="arrow-forward" size={18} color="black" />
+                        </TouchableOpacity>
+)}
                     </View>
+                </View>
+            {activeInput === 'destination' && (
+                <View style={styles.autocompleteOverlay}>
+                <ScrollView
+style={styles.autocompleteDropdown}
+                contentContainerStyle={{ flexGrow: 1 }}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={true}
+>
+                {filteredPlaces.length > 0 ? (
+                    filteredPlaces.map((place, idx) => (
+                        <TouchableOpacity
+key={idx}
+                style={styles.autocompleteItem}
+                onPress={() => selectPlace(place)}
+>
+                <Ionicons name="location-sharp" size={18} color={Colors.primary} />
+                <View style={{ marginLeft: 10 }}>
+                    <Text style={styles.placeName}>{place.name}</Text>
+                    {place.description && <Text style={styles.placeCategory}>({place.description})</Text>}
+                    </View>
+                </TouchableOpacity>
+            ))
+            ) : (
+destination.trim().length > 0 && (
+            <TouchableOpacity
+style={styles.noResultItem}
+            onPress={() => selectPlace({ name: destination, description: 'Manual' } as any)}
+>
+            <Ionicons name="search-outline" size={20} color={Colors.gray} />
+            <View style={{ marginLeft: 10 }}>
+                <Text style={styles.noResultText}>No saved location found</Text>
+                <Text style={[styles.placeCategory, { color: Colors.primary, marginTop: 2 }]}>Tap to use "{destination}" as destination</Text>
+                </View>
+            </TouchableOpacity>
+)
+    )
+}
+</ScrollView >
+    </View >
+        )}
+</View >
 
-                    {/* 1. BOOKING OR ACTIVE SUMMARY SECTION (Space for spacing only) */}
-                    <View style={{ height: 10 }} />
+    
+{/* 2. AD SECTIONS - Only in Idle */}
+<View style={{ height: 10 }} />
+<View style={styles.postersList}>
+    <View style={styles.adPosterVertical}>
+        <View style={styles.adImagePlaceholder}>
+            <Ionicons name="megaphone-outline" size={40} color={Colors.gray} />
+        </View>
+        <View style={styles.adContent}>
+            <Text style={styles.adTitle}>Poster 1: Special Offer</Text>
+            <Text style={styles.adSubtitle}>Get 20% off your next ride in Chirundu area!</Text>
+        </View>
+    </View>
+    <View style={styles.adPosterVertical}>
+        <View style={styles.adImagePlaceholder}>
+            <Ionicons name="gift-outline" size={40} color={Colors.gray} />
+        </View>
+        <View style={styles.adContent}>
+            <Text style={styles.adTitle}>Poster 2: Referral Bonus</Text>
+            <Text style={styles.adSubtitle}>Refer a friend and earn K50 instantly.</Text>
+        </View>
+    </View>
+</View>
+<View style={styles.businessSection}>
+    <Text style={styles.sectionTitle}>Partner Vendors</Text>
+    <View style={styles.vendorGrid}>
+        {[
+            {name: 'Supermarket', icon: 'cart' },
+            {name: 'Restaurant', icon: 'fast-food' },
+            {name: 'Pharmacy', icon: 'medical' },
+            {name: 'Hardware', icon: 'construct' },
+            {name: 'Laundry', icon: 'shirt' },
+            {name: 'Bakery', icon: 'pizza' },
+        ].map((vendor, idx) => (
+            <TouchableOpacity key={idx} style={styles.vendorCardGrid}>
+                <View style={styles.businessIconBoxSmall}>
+                    <Ionicons name={vendor.icon as any} size={18} color={Colors.primary} />
+                </View>
+                <Text style={styles.businessNameSmall} numberOfLines={1}>{vendor.name}</Text>
+            </TouchableOpacity>
+        ))}
+    </View>
+</View>
 
-                    {rideStatus !== 'preview' && (
-                        <>
-                            {/* 3. VERTICAL POSTERS */}
-                            <View style={styles.postersList}>
-                                <View style={styles.adPosterVertical}>
-                                    <View style={styles.adImagePlaceholder}>
-                                        <Ionicons name="megaphone-outline" size={40} color={Colors.gray} />
-                                    </View>
-                                    <View style={styles.adContent}>
-                                        <Text style={styles.adTitle}>Poster 1: Special Offer</Text>
-                                        <Text style={styles.adSubtitle}>Get 20% off your next ride in Chirundu area!</Text>
-                                    </View>
-                                </View>
+<View style={styles.promotionSection}>
+    <View style={styles.referralCard}>
+        <View style={styles.promoIconCircle}>
+            <Ionicons name="gift" size={20} color={Colors.black} />
+        </View>
+        <View style={{ marginLeft: 15 }}>
+            <Text style={styles.referralTitle}>Refer & Earn K50</Text>
+            <Text style={styles.referralSubtitle}>Share your code with friends</Text>
+        </View>
+    </View>
+</View>
+</ScrollView>
+) : (
+/* 
+ACTIVE STATE CONTAINER 
+Uses a View that doesn't capture touches on empty areas, allowing users to interact with the map.
+*/
+<View style={{ flex: 1 }} pointerEvents="box-none">
+    <View style={{ marginTop: 80, paddingHorizontal: 20 }} pointerEvents="box-none">
+        {rideStatus !== 'preview' && (
+            <ActiveTripSummary
+                pickup={pickup || rideInfo?.pickup_location || '...'}
+                destination={destination || rideInfo?.destination || '...'}
+                status={rideStatus}
+                driverName={rideInfo?.driver_name}
+                plate_number={`${rideInfo?.car_model || ''} ${rideInfo?.car_color || ''} • ${rideInfo?.plate_number || ''}`.trim()}
+                fare={appliedPromo ? calculateDiscountedFare() : (fare || rideInfo?.fare)}
+                onDetailsPress={() => setIsTrackingDetailVisible(true)}
+            />
+        )}
+    </View>
+</View>
+)}
 
-                                <View style={styles.adPosterVertical}>
-                                    <View style={styles.adImagePlaceholder}>
-                                        <Ionicons name="gift-outline" size={40} color={Colors.gray} />
-                                    </View>
-                                    <View style={styles.adContent}>
-                                        <Text style={styles.adTitle}>Poster 2: Referral Bonus</Text>
-                                        <Text style={styles.adSubtitle}>Refer a friend and earn K50 instantly.</Text>
-                                    </View>
-                                </View>
-                            </View>
+{/* 3. PREVIEW OVERLAY (BOOKING PREPARATION) */}
+{rideStatus === 'preview' && (
+<View style={styles.previewBox}>
+    {/* Trip summary: pickup and destination */}
+    <View style={{ marginBottom: 15, width: '100%' }}>
+        <View style={[styles.tripRow, { marginBottom: 8 }]}>
+            <Ionicons name="location" size={20} color={Colors.success} />
+            <Text style={[styles.tripText, { flex: 1, marginLeft: 10, color: 'white', fontWeight: '600' }]} numberOfLines={2}>
+                {pickup}
+            </Text>
+        </View>
+        <View style={styles.tripRow}>
+            <Ionicons name="flag" size={20} color={Colors.danger} />
+            <Text style={[styles.tripText, { flex: 1, marginLeft: 10, color: 'white', fontWeight: '600' }]} numberOfLines={2}>
+                {destination}
+            </Text>
+        </View>
+    </View>
 
-                            {/* 4. VENDOR GRID (3 on top, 3 below) */}
-                            <View style={styles.businessSection}>
-                                <Text style={styles.sectionTitle}>Partner Vendors</Text>
-                                <View style={styles.vendorGrid}>
-                                    {[
-                                        { name: 'Supermarket', icon: 'cart' },
-                                        { name: 'Restaurant', icon: 'fast-food' },
-                                        { name: 'Pharmacy', icon: 'medical' },
-                                        { name: 'Hardware', icon: 'construct' },
-                                        { name: 'Laundry', icon: 'shirt' },
-                                        { name: 'Bakery', icon: 'pizza' },
-                                    ].map((vendor, idx) => (
-                                        <TouchableOpacity key={idx} style={styles.vendorCardGrid}>
-                                            <View style={styles.businessIconBoxSmall}>
-                                                <Ionicons name={vendor.icon as any} size={18} color={Colors.primary} />
-                                            </View>
-                                            <Text style={styles.businessNameSmall} numberOfLines={1}>{vendor.name}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                            </View>
-                        </>
-                    )}
-                </ScrollView>
+    {isManualDestination ? (
+        /* Manual / custom destination — no price available */
+        <View style={styles.manualFareBox}>
+            <Ionicons name="information-circle-outline" size={20} color="#F59E0B" />
+            <View style={{ marginLeft: 8, flex: 1 }}>
+                <Text style={styles.manualFareTitle}>DESTINATION NOT FOUND ON MAP</Text>
+                <Text style={styles.manualFareSubtitle}>Proceed as price will be processed during the trip and will be displayed after the trip is completed. thank you.</Text>
+            </View>
+        </View>
+    ) : (
+        /* Normal trip — show calculated fare */
+        <>
+            <Text style={styles.fareTitle}>
+                Trip Fare: <Text style={{ textDecorationLine: appliedPromo ? 'line-through' : 'none', color: appliedPromo ? Colors.gray : Colors.primary }}>K{(fare * (VEHICLE_CLASSES.find(c => c.id === selectedVehicleClass)?.multiplier || 1)).toFixed(2)}</Text>
+                {appliedPromo && <Text style={{ color: Colors.success }}> K{calculateDiscountedFare()}</Text>}
+            </Text>
+            <Text style={styles.distText}>{distance} km • ~{Math.ceil(Number(distance) * 3)} mins</Text>
 
-                {/* 3. PREVIEW & FULL TRACKING (Overlays) */}
-                {rideStatus === 'preview' && (
-                    <View style={styles.overlayContainer}>
-                        <View style={styles.previewBox}>
-                            {/* Trip summary: pickup and destination */}
-                            <View style={{ marginBottom: 15, width: '100%' }}>
-                                <View style={[styles.tripRow, { marginBottom: 8 }]}>
-                                    <Ionicons name="location" size={20} color={Colors.success} />
-                                    <Text style={[styles.tripText, { flex: 1, marginLeft: 10, color: 'white', fontWeight: '600' }]} numberOfLines={2}>
-                                        {pickup}
-                                    </Text>
-                                </View>
-                                <View style={styles.tripRow}>
-                                    <Ionicons name="flag" size={20} color={Colors.danger} />
-                                    <Text style={[styles.tripText, { flex: 1, marginLeft: 10, color: 'white', fontWeight: '600' }]} numberOfLines={2}>
-                                        {destination}
-                                    </Text>
-                                </View>
-                            </View>
+            <View style={styles.classSelector}>
+                {VEHICLE_CLASSES.map((vc) => (
+                    <TouchableOpacity
+                        key={vc.id}
+                        style={[
+                            styles.classItem,
+                            selectedVehicleClass === vc.id && styles.classItemSelected
+                        ]}
+                        onPress={() => setSelectedVehicleClass(vc.id)}
+                    >
+                        <Ionicons 
+                            name={vc.icon as any} 
+                            size={24} 
+                            color={selectedVehicleClass === vc.id ? Colors.primary : Colors.gray} 
+                        />
+                        <Text style={[
+                            styles.classLabel,
+                            selectedVehicleClass === vc.id && styles.classLabelSelected
+                        ]}>{vc.name}</Text>
+                        <Text style={styles.classMultiplier}>
+                            x{vc.multiplier}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
 
-                            {isManualDestination ? (
-                                /* Manual / custom destination — no price available */
-                                <View style={styles.manualFareBox}>
-                                    <Ionicons name="information-circle-outline" size={20} color="#F59E0B" />
-                                    <View style={{ marginLeft: 8, flex: 1 }}>
-                                        <Text style={styles.manualFareTitle}>DESTINATION NOT FOUND ON MAP</Text>
-                                        <Text style={styles.manualFareSubtitle}>Proceed as price will be processed during the trip and will be displayed after the trip is completed. thank you.</Text>
-                                    </View>
-                                </View>
-                            ) : (
-                                /* Normal trip — show calculated fare */
-                                <>
-                                    <Text style={styles.fareTitle}>
-                                        Trip Fare: <Text style={{ textDecorationLine: appliedPromo ? 'line-through' : 'none', color: appliedPromo ? Colors.gray : Colors.primary }}>K{fare}</Text>
-                                        {appliedPromo && <Text style={{ color: Colors.success }}> K{calculateDiscountedFare()}</Text>}
-                                    </Text>
-                                    <Text style={styles.distText}>{distance} km • ~{Math.ceil(Number(distance) * 3)} mins</Text>
+            {showPromoInput ? (
+                <View style={styles.promoInputRow}>
+                    <TextInput
+                        placeholder="Enter code"
+                        style={styles.promoInput}
+                        value={promoInput}
+                        onChangeText={setPromoInput}
+                        autoCapitalize="characters"
+                    />
+                    <TouchableOpacity style={styles.promoApplyBtn} onPress={handleApplyPromo} disabled={isApplyingPromo}>
+                        {isApplyingPromo ? <ActivityIndicator size="small" color="white" /> : <Text style={styles.promoBtnText}>Apply</Text>}
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setShowPromoInput(false)} style={{ marginLeft: 10 }}>
+                        <Ionicons name="close-circle" size={24} color={Colors.gray} />
+                    </TouchableOpacity>
+                </View>
+            ) : (
+                !appliedPromo && hasValidPromos && (
+                    <TouchableOpacity style={styles.promoTrigger} onPress={() => setShowPromoInput(true)}>
+                        <Ionicons name="pricetag" size={16} color={Colors.primary} />
+                        <Text style={styles.promoTriggerText}>Use Promocode</Text>
+                    </TouchableOpacity>
+                )
+            )}
 
-                                    {showPromoInput ? (
-                                        <View style={styles.promoInputRow}>
-                                            <TextInput
-                                                placeholder="Enter code"
-                                                style={styles.promoInput}
-                                                value={promoInput}
-                                                onChangeText={setPromoInput}
-                                                autoCapitalize="characters"
-                                            />
-                                            <TouchableOpacity style={styles.promoApplyBtn} onPress={handleApplyPromo} disabled={isApplyingPromo}>
-                                                {isApplyingPromo ? <ActivityIndicator size="small" color="white" /> : <Text style={styles.promoBtnText}>Apply</Text>}
-                                            </TouchableOpacity>
-                                            <TouchableOpacity onPress={() => setShowPromoInput(false)} style={{ marginLeft: 10 }}>
-                                                <Ionicons name="close-circle" size={24} color={Colors.gray} />
-                                            </TouchableOpacity>
-                                        </View>
-                                    ) : (
-                                        !appliedPromo && hasValidPromos && (
-                                            <TouchableOpacity style={styles.promoTrigger} onPress={() => setShowPromoInput(true)}>
-                                                <Ionicons name="pricetag" size={16} color={Colors.primary} />
-                                                <Text style={styles.promoTriggerText}>Use Promocode</Text>
-                                            </TouchableOpacity>
-                                        )
-                                    )}
+            {appliedPromo && (
+                <View style={styles.appliedPromoTag}>
+                    <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+                    <Text style={styles.appliedPromoText}>Promo Applied: {appliedPromo.code}</Text>
+                    <TouchableOpacity onPress={() => setAppliedPromo(null)}>
+                        <Text style={{ color: 'red', marginLeft: 10, fontSize: 12 }}>Remove</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+        </>
+    )}
 
-                                    {appliedPromo && (
-                                        <View style={styles.appliedPromoTag}>
-                                            <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
-                                            <Text style={styles.appliedPromoText}>Promo Applied: {appliedPromo.code}</Text>
-                                            <TouchableOpacity onPress={() => setAppliedPromo(null)}>
-                                                <Text style={{ color: 'red', marginLeft: 10, fontSize: 12 }}>Remove</Text>
-                                            </TouchableOpacity>
-                                        </View>
-                                    )}
-                                </>
-                            )}
-                        </View>
+    <View style={styles.actionIsland}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+                <Button title="Cancel" variant="danger" onPress={resetToIdle} />
+            </View>
+            <View style={{ flex: 1.5 }}>
+                <Button title="ORDER NOW" variant="success" onPress={confirmRequest} />
+            </View>
+        </View>
+    </View>
+</View>
+)}
 
-                        <View style={styles.actionIsland}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                <View style={{ flex: 1, marginRight: 10 }}>
-                                    <Button title="Cancel" variant="danger" onPress={resetToIdle} />
-                                </View>
-                                <View style={{ flex: 1.5 }}>
-                                    <Button title="ORDER NOW" variant="success" onPress={confirmRequest} />
-                                </View>
-                            </View>
-                        </View>
+{/* 4. ACTIVE RIDE STATUS PANEL (EXPANDED VIEW) */ }
+{
+    isTrackingDetailVisible && !['idle', 'preview', 'completed', 'cancelled'].includes(rideStatus) && (
+        <View style={styles.overlayContainer}>
+            <TouchableOpacity style={styles.minimizeBtn} onPress={() => setIsTrackingDetailVisible(false)}>
+                <Ionicons name="chevron-down" size={24} color="white" />
+            </TouchableOpacity>
+
+            <View style={styles.rideIsland}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                    <View>
+                        <Text style={styles.tripLabel}>Trip Details:</Text>
+                        <View style={styles.tripRow}><Ionicons name="location-outline" size={16} color={Colors.primary} /><Text style={styles.tripText} numberOfLines={1}>{pickup || rideInfo?.pickup_location || 'Trip in Progress'}</Text></View>
+                        <View style={styles.tripRow}><Ionicons name="flag-outline" size={16} color="red" /><Text style={styles.tripText} numberOfLines={1}>{destination || rideInfo?.destination || '...'}</Text></View>
+                    </View>
+                </View>
+
+                {!!(rideInfo?.fare && Number(rideInfo.fare) > 0) && (
+                    <View style={styles.fareRow}>
+                        <Text style={{ fontWeight: 'bold', color: 'white' }}>K{rideInfo.fare}</Text>
+                        <Text style={{ color: Colors.gray }}>{rideInfo.distance} km</Text>
                     </View>
                 )}
+                <View style={{ height: 1, backgroundColor: '#333', marginVertical: 10 }} />
 
-                {/* 4. ACTIVE RIDE STATUS PANEL (EXPANDED VIEW) */}
-                {isTrackingDetailVisible && !['idle', 'preview', 'completed', 'cancelled'].includes(rideStatus) && (
-                    <View style={styles.overlayContainer}>
-                        <TouchableOpacity style={styles.minimizeBtn} onPress={() => setIsTrackingDetailVisible(false)}>
-                            <Ionicons name="chevron-down" size={24} color="white" />
-                        </TouchableOpacity>
+                {rideStatus === 'searching' ? (
+                    <View style={{ alignItems: 'center', paddingVertical: 10 }}>
+                        <ActivityIndicator size="large" color={Colors.primary} />
+                        <Text style={styles.islandTitle}>Searching for a driver...</Text>
+                    </View>
+                ) : (
+                    <View>
+                        <View style={styles.statusRow}>
+                            <View style={styles.statusBadge}>
+                                <Text style={styles.statusBadgeText}>{(rideStatus || 'ACTIVE').toUpperCase().replace('_', ' ')}</Text>
+                            </View>
+                            <Text style={styles.timeText}>
+                                {rideStatus === 'in_progress' ? 'Trip in Progress' :
+                                    rideStatus === 'arrived' ? 'Driver Arrived' : 'Arriving Soon'}
+                            </Text>
+                        </View>
 
-                        <View style={styles.rideIsland}>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                                <View>
-                                    <Text style={styles.tripLabel}>Trip Details:</Text>
-                                    <View style={styles.tripRow}><Ionicons name="location-outline" size={16} color={Colors.primary} /><Text style={styles.tripText} numberOfLines={1}>{pickup || rideInfo?.pickup_location || 'Trip in Progress'}</Text></View>
-                                    <View style={styles.tripRow}><Ionicons name="flag-outline" size={16} color="red" /><Text style={styles.tripText} numberOfLines={1}>{destination || rideInfo?.destination || '...'}</Text></View>
+                        <View style={styles.driverRow}>
+                            {/* Driver Photo & Rating */}
+                            <View>
+                                {rideInfo?.driver_photo ? (
+                                    <Image source={{ uri: rideInfo.driver_photo }} style={styles.driverAvatar} />
+                                ) : (
+                                    <View style={styles.avatarPlaceholder}><Text style={{ fontSize: 20 }}>👤</Text></View>
+                                )}
+                                <Text style={styles.rating}>⭐ {rideInfo?.driver_rating || '4.9'}</Text>
+                            </View>
+
+                            <View style={{ flex: 1, marginLeft: 10 }}>
+                                <Text style={[styles.driverName, { color: 'white' }]}>{rideInfo?.driver_name || "Unknown Driver"}</Text>
+                                <Text style={{ fontSize: 12, color: '#999', marginBottom: 2 }}>
+                                    {rideInfo?.driver_phone || "No Phone Number"}
+                                </Text>
+                                <Text style={styles.carInfo}>
+                                    {rideInfo?.car_color} {rideInfo?.car_model}
+                                </Text>
+                                <View style={styles.plateBadge}>
+                                    <Text style={styles.plateText}>{rideInfo?.plate_number || 'TR 123'}</Text>
                                 </View>
                             </View>
 
-                            {!!(rideInfo?.fare && Number(rideInfo.fare) > 0) && (
-                                <View style={styles.fareRow}>
-                                    <Text style={{ fontWeight: 'bold', color: 'white' }}>K{rideInfo.fare}</Text>
-                                    <Text style={{ color: Colors.gray }}>{rideInfo.distance} km</Text>
-                                </View>
-                            )}
-                            <View style={{ height: 1, backgroundColor: '#333', marginVertical: 10 }} />
-
-                            {rideStatus === 'searching' ? (
-                                <View style={{ alignItems: 'center', paddingVertical: 10 }}>
-                                    <ActivityIndicator size="large" color={Colors.primary} />
-                                    <Text style={styles.islandTitle}>Searching for a driver...</Text>
-                                </View>
-                            ) : (
-                                <View>
-                                    <View style={styles.statusRow}>
-                                        <View style={styles.statusBadge}>
-                                            <Text style={styles.statusBadgeText}>{(rideStatus || 'ACTIVE').toUpperCase().replace('_', ' ')}</Text>
-                                        </View>
-                                        <Text style={styles.timeText}>
-                                            {rideStatus === 'in_progress' ? 'Trip in Progress' :
-                                                rideStatus === 'arrived' ? 'Driver Arrived' : 'Arriving Soon'}
-                                        </Text>
-                                    </View>
-
-                                    <View style={styles.driverRow}>
-                                        {/* Driver Photo & Rating */}
-                                        <View>
-                                            {rideInfo?.driver_photo ? (
-                                                <Image source={{ uri: rideInfo.driver_photo }} style={styles.driverAvatar} />
-                                            ) : (
-                                                <View style={styles.avatarPlaceholder}><Text style={{ fontSize: 20 }}>👤</Text></View>
-                                            )}
-                                            <Text style={styles.rating}>⭐ {rideInfo?.driver_rating || '4.9'}</Text>
-                                        </View>
-
-                                        <View style={{ flex: 1, marginLeft: 10 }}>
-                                            <Text style={[styles.driverName, { color: 'white' }]}>{rideInfo?.driver_name || "Unknown Driver"}</Text>
-                                            <Text style={{ fontSize: 12, color: '#999', marginBottom: 2 }}>
-                                                {rideInfo?.driver_phone || "No Phone Number"}
-                                            </Text>
-                                            <Text style={styles.carInfo}>
-                                                {rideInfo?.car_color} {rideInfo?.car_model}
-                                            </Text>
-                                            <View style={styles.plateBadge}>
-                                                <Text style={styles.plateText}>{rideInfo?.plate_number || 'TR 123'}</Text>
-                                            </View>
-                                        </View>
-
-                                        <TouchableOpacity style={styles.callBtn} onPress={() => {
-                                            if (rideInfo?.driver_phone) Linking.openURL(`tel:${rideInfo.driver_phone}`);
-                                            else Alert.alert("No Phone", "Driver phone number not available.");
-                                        }}>
-                                            <Ionicons name="call" size={20} color="white" />
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-                            )}
-                        </View>
-
-                        <View style={styles.actionIsland}>
-                            <TouchableOpacity onPress={handleCancelRide} style={{ backgroundColor: '#FF4444' + '11', borderColor: Colors.danger, borderWidth: 1, padding: 12, borderRadius: 12, alignItems: 'center' }}>
-                                <Text style={{ color: Colors.danger, fontWeight: 'bold' }}>Cancel Ride</Text>
+                            <TouchableOpacity style={styles.callBtn} onPress={() => {
+                                if (rideInfo?.driver_phone) Linking.openURL(`tel:${rideInfo.driver_phone}`);
+                                else Alert.alert("No Phone", "Driver phone number not available.");
+                            }}>
+                                <Ionicons name="call" size={20} color="white" />
                             </TouchableOpacity>
                         </View>
                     </View>
                 )}
-
-                {/* 4. COMPLETED STATE */}
-                {rideStatus === 'completed' && (
-                    <View style={styles.completedBox}>
-                        <Ionicons name="checkmark-circle" size={60} color="green" />
-                        <Text style={styles.completedTitle}>Ride Completed!</Text>
-                        {(rideInfo?.fare && Number(rideInfo.fare) > 0) ? (
-                            <Text style={{ color: Colors.gray, marginBottom: 20 }}>Total Fare: K{rideInfo.fare}</Text>
-                        ) : (
-                            <Text style={{ color: Colors.gray, marginBottom: 20 }}>Fare settled with driver</Text>
-                        )}
-                        <Button title="Book Another Ride" onPress={resetToIdle} />
-                    </View>
-                )}
             </View>
 
-            {isLoadingLoc && (
-                <View style={styles.loadingOverlay}>
-                    <ActivityIndicator size="large" color={Colors.primary} />
-                    <Text style={{ marginTop: 10 }}>Locating you...</Text>
-                </View>
-            )}
-
-            {isMenuOpen && (
-                <TouchableOpacity style={styles.blurOverlay} onPress={toggleMenu} activeOpacity={1}>
-                    <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={styles.actionIsland}>
+                <TouchableOpacity onPress={handleCancelRide} style={{ backgroundColor: '#FF4444' + '11', borderColor: Colors.danger, borderWidth: 1, padding: 12, borderRadius: 12, alignItems: 'center' }}>
+                    <Text style={{ color: Colors.danger, fontWeight: 'bold' }}>Cancel Ride</Text>
                 </TouchableOpacity>
+            </View>
+        </View>
+    )
+}
+
+{/* 4. COMPLETED STATE */ }
+{
+    rideStatus === 'completed' && (
+        <View style={styles.completedBox}>
+            <Ionicons name="checkmark-circle" size={60} color="green" />
+            <Text style={styles.completedTitle}>Ride Completed!</Text>
+            {(rideInfo?.fare && Number(rideInfo.fare) > 0) ? (
+                <Text style={{ color: Colors.gray, marginBottom: 20 }}>Total Fare: K{rideInfo.fare}</Text>
+            ) : (
+                <Text style={{ color: Colors.gray, marginBottom: 20 }}>Fare settled with driver</Text>
             )}
+            <Button title="Book Another Ride" onPress={resetToIdle} />
+        </View>
+    )
+}
+            </View >
 
-            {/* @ts-ignore */}
-            <Animated.View style={[styles.drawer, { transform: [{ translateX: slideAnim }] }]}>
-                {/* ... Drawer Content ... */}
-                <View style={styles.drawerHeader}>
-                    <View style={styles.profileAvatar}>
-                        {user?.profile_photo ? (
-                            <Image source={{ uri: user.profile_photo }} style={{ width: 60, height: 60, borderRadius: 30 }} />
-                        ) : (
-                            <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'U'}</Text>
-                        )}
-                    </View>
-                    <Text style={styles.drawerName}>{user?.name}</Text>
-                    <Text style={styles.drawerPhone}>{user?.phone}</Text>
-                </View>
+    { isLoadingLoc && (
+        <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+            <Text style={{ marginTop: 10 }}>Locating you...</Text>
+        </View>
+    )}
 
-                <View style={styles.drawerItems}>
-                    <MenuItem icon="person" label="Profile" onPress={() => { navigation.navigate('PersonalInformation'); setIsMenuOpen(false); }} />
-                    <MenuItem icon="time" label="My Rides" onPress={() => { navigation.navigate('MyRides'); setIsMenuOpen(false); }} />
-                    <MenuItem icon="wallet" label="Payment" onPress={() => { navigation.navigate('Payments'); setIsMenuOpen(false); }} />
-                    <MenuItem icon="pricetag" label="Promotions" onPress={() => { navigation.navigate('Promotions'); setIsMenuOpen(false); }} />
-                    <MenuItem icon="settings" label="Settings" onPress={() => { navigation.navigate('Settings'); setIsMenuOpen(false); }} />
-                    <View style={styles.divider} />
-                    <MenuItem icon="help-circle" label="Support" onPress={() => { navigation.navigate('HelpSupport'); setIsMenuOpen(false); }} />
-                    <MenuItem icon="log-out" label="Logout" danger onPress={logout} />
-                </View>
-            </Animated.View>
-        </KeyboardAvoidingView>
+{
+    isMenuOpen && (
+        <TouchableOpacity style={styles.blurOverlay} onPress={toggleMenu} activeOpacity={1}>
+            <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+        </TouchableOpacity>
+    )
+}
+
+{/* @ts-ignore */ }
+<Animated.View style={[styles.drawer, { transform: [{ translateX: slideAnim }] }]}>
+    {/* ... Drawer Content ... */}
+    <View style={styles.drawerHeader}>
+        <View style={styles.profileAvatar}>
+            {user?.profile_photo ? (
+                <Image source={{ uri: user.profile_photo }} style={{ width: 60, height: 60, borderRadius: 30 }} />
+            ) : (
+                <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'U'}</Text>
+            )}
+        </View>
+        <Text style={styles.drawerName}>{user?.name}</Text>
+        <Text style={styles.drawerPhone}>{user?.phone}</Text>
+    </View>
+
+    <View style={styles.drawerItems}>
+        <MenuItem icon="person" label="Profile" onPress={() => { navigation.navigate('PersonalInformation'); setIsMenuOpen(false); }} />
+        <MenuItem icon="time" label="My Rides" onPress={() => { navigation.navigate('MyRides'); setIsMenuOpen(false); }} />
+        <MenuItem icon="wallet" label="Payment" onPress={() => { navigation.navigate('Payments'); setIsMenuOpen(false); }} />
+        <MenuItem icon="pricetag" label="Promotions" onPress={() => { navigation.navigate('Promotions'); setIsMenuOpen(false); }} />
+        <MenuItem icon="settings" label="Settings" onPress={() => { navigation.navigate('Settings'); setIsMenuOpen(false); }} />
+        <View style={styles.divider} />
+        <MenuItem icon="help-circle" label="Support" onPress={() => { navigation.navigate('HelpSupport'); setIsMenuOpen(false); }} />
+        <MenuItem icon="log-out" label="Logout" danger onPress={logout} />
+    </View>
+</Animated.View>
+        </KeyboardAvoidingView >
     );
 };
 
@@ -1582,4 +1654,39 @@ const styles = StyleSheet.create({
     promoIconCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.black, justifyContent: 'center', alignItems: 'center' },
     referralTitle: { fontSize: 15, fontWeight: 'bold', color: Colors.black },
     referralSubtitle: { fontSize: 11, color: Colors.black, opacity: 0.8 },
+    classSelector: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 15,
+        marginBottom: 5,
+        width: '100%',
+    },
+    classItem: {
+        flex: 1,
+        backgroundColor: Colors.background,
+        padding: 10,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginHorizontal: 4,
+        borderWidth: 1,
+        borderColor: '#333',
+    },
+    classItemSelected: {
+        borderColor: Colors.primary,
+        backgroundColor: Colors.primary + '11',
+    },
+    classLabel: {
+        color: Colors.gray,
+        fontSize: 12,
+        fontWeight: 'bold',
+        marginTop: 5,
+    },
+    classLabelSelected: {
+        color: Colors.primary,
+    },
+    classMultiplier: {
+        color: Colors.gray,
+        fontSize: 10,
+        marginTop: 2,
+    },
 });

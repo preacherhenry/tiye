@@ -53,7 +53,12 @@ const DriverApplyScreen = ({ navigation }: any) => {
         license_back: null,
         nrc_front: null,
         nrc_back: null,
-        profile_photo: null
+        profile_photo: null,
+        car_front: null,
+        car_back: null,
+        car_side_left: null,
+        car_side_right: null,
+        car_interior: null
     });
 
     const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -92,8 +97,13 @@ const DriverApplyScreen = ({ navigation }: any) => {
                 return false;
             }
         } else if (step === 4) {
-            if (!docs.license_front || !docs.license_back || !docs.nrc_front || !docs.nrc_back || !docs.profile_photo) {
-                Alert.alert("Error", "Please upload all required documents.");
+            const requiredDocs = [
+                'license_front', 'license_back', 'nrc_front', 'nrc_back', 'profile_photo',
+                'car_front', 'car_back', 'car_side_left', 'car_side_right', 'car_interior'
+            ];
+            const missing = requiredDocs.some(d => !docs[d]);
+            if (missing) {
+                Alert.alert("Error", "Please upload all required personal and vehicle documents.");
                 return false;
             }
         }
@@ -211,6 +221,13 @@ const DriverApplyScreen = ({ navigation }: any) => {
                         <DocPicker label="National ID / NRC (Front)" uri={docs.nrc_front} onPick={() => pickImage('nrc_front')} />
                         <DocPicker label="National ID / NRC (Back)" uri={docs.nrc_back} onPick={() => pickImage('nrc_back')} />
                         <DocPicker label="Profile Photo" uri={docs.profile_photo} onPick={() => pickImage('profile_photo')} />
+                        <View style={{ height: 20 }} />
+                        <Text style={[styles.stepTitle, { fontSize: 16 }]}>Car Photos</Text>
+                        <DocPicker label="Car Front View" uri={docs.car_front} onPick={() => pickImage('car_front')} />
+                        <DocPicker label="Car Back View" uri={docs.car_back} onPick={() => pickImage('car_back')} />
+                        <DocPicker label="Car Side (Left)" uri={docs.car_side_left} onPick={() => pickImage('car_side_left')} />
+                        <DocPicker label="Car Side (Right)" uri={docs.car_side_right} onPick={() => pickImage('car_side_right')} />
+                        <DocPicker label="Car Interior" uri={docs.car_interior} onPick={() => pickImage('car_interior')} />
                     </View>
                 )}
 
@@ -286,7 +303,7 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.primary
     },
     scrollContent: { padding: 20, paddingBottom: 40 },
-    stepContainer: { animationAction: 'fadeIn' },
+    stepContainer: { flex: 1 },
     stepTitle: { fontSize: 20, fontWeight: 'bold', color: Colors.text, marginBottom: 25 },
     inputContainer: { marginBottom: 20 },
     label: { color: Colors.gray, fontSize: 14, marginBottom: 8, fontWeight: '500' },

@@ -122,7 +122,8 @@ export const AuthProvider = ({ children }: any) => {
             if (res.data.success) {
                 const serverUser = res.data.user;
 
-                // Auto-logout drivers whose subscription has expired (with 1-min delay)
+                // Auto-logout drivers whose subscription has expired (DISABLED for Wallet-based model)
+                /*
                 if (serverUser.role === 'driver' && serverUser.subscription_status === 'expired') {
                     if (!logoutTimerRef.current) {
                         console.log('🔒 Subscription expired. Starting 1-min logout timer...');
@@ -140,10 +141,10 @@ export const AuthProvider = ({ children }: any) => {
                     }
                     return;
                 } else if (logoutTimerRef.current) {
-                    // Clear timer if status is no longer expired (e.g. user renewed just in time)
                     clearTimeout(logoutTimerRef.current);
                     logoutTimerRef.current = null;
                 }
+                */
 
 
                 setUser(prev => {

@@ -18,11 +18,15 @@ export const SubscriptionMonitor = ({ navigation }: any) => {
     const isProblematic = ['paused', 'expired', 'none', 'rejected'].includes(status);
 
     useEffect(() => {
+        // Disabled legacy subscription modal for wallet-based model
+        setModalVisible(false);
+        /*
         if (isProblematic) {
             checkOptions();
         } else {
             setModalVisible(false);
         }
+        */
     }, [status]);
 
     const checkOptions = async () => {

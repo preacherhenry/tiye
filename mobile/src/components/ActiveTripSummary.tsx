@@ -1,20 +1,46 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 
 interface ActiveTripSummaryProps {
     pickup: string;
     destination: string;
-    onPress: () => void;
+    status?: 'searching' | 'accepted' | 'arrived' | 'in_progress' | 'completed';
+    driverName?: string;
+    plate_number?: string;
+    fare?: string | number;
+    onDetailsPress: () => void;
 }
 
-export const ActiveTripSummary: React.FC<ActiveTripSummaryProps> = ({ pickup, destination, onPress }) => {
+export const ActiveTripSummary: React.FC<ActiveTripSummaryProps> = ({ 
+    pickup, 
+    destination, 
+    status = 'searching', 
+    driverName, 
+    plate_number, 
+    fare, 
+    onDetailsPress 
+}) => {
+    const getStatusHeader = () => {
+        switch (status) {
+            case 'searching': return 'SEARCHING FOR DRIVER...';
+            case 'accepted': return 'DRIVER IS ARRIVING...';
+            case 'arrived': return 'DRIVER AT PICKUP';
+            case 'in_progress': return 'TRIP IN PROGRESS';
+            default: return 'ACTIVE TRIP';
+        }
+    };
+
     return (
-        <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.9}>
+        <TouchableOpacity style={styles.container} onPress={onDetailsPress} activeOpacity={0.9}>
             <View style={styles.statusHeader}>
-                <View style={styles.liveIndicator} />
-                <Text style={styles.statusTitle}>Active Trip</Text>
+                {status === 'searching' ? (
+                    <ActivityIndicator size="small" color={Colors.primary} style={{ marginRight: 8 }} />
+                ) : (
+                    <View style={styles.liveIndicator} />
+                )}
+                <Text style={styles.statusTitle}>{getStatusHeader()}</Text>
                 <Ionicons name="chevron-forward" size={18} color={Colors.gray} style={{ marginLeft: 'auto' }} />
             </View>
 
@@ -36,6 +62,26 @@ export const ActiveTripSummary: React.FC<ActiveTripSummaryProps> = ({ pickup, de
                     </View>
                 </View>
             </View>
+
+            {driverName && (
+                <View style={styles.driverSection}>
+                    <View style={{ height: 1, backgroundColor: '#333', marginVertical: 12 }} />
+                    <View style={styles.driverInfoRow}>
+                        <View style={styles.driverIconBox}>
+                            <Ionicons name="person" size={16} color="white" />
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 10 }}>
+                            <Text style={styles.driverNameText}>{driverName}</Text>
+                            <Text style={styles.carPlateText}>{plate_number || 'No Plate Info'}</Text>
+                        </View>
+                        {fare && (
+                            <View style={styles.fareBox}>
+                                <Text style={styles.fareText}>K{fare}</Text>
+                            </View>
+                        )}
+                    </View>
+                </View>
+            )}
         </TouchableOpacity>
     );
 };
@@ -108,5 +154,43 @@ const styles = StyleSheet.create({
         color: Colors.text,
         fontSize: 14,
         fontWeight: '600',
+    },
+    driverSection: {
+        width: '100%',
+    },
+    driverInfoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    driverIconBox: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: Colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    driverNameText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 14,
+    },
+    carPlateText: {
+        color: Colors.gray,
+        fontSize: 10,
+        marginTop: 2,
+    },
+    fareBox: {
+        backgroundColor: Colors.primary + '22',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: Colors.primary,
+    },
+    fareText: {
+        color: Colors.primary,
+        fontWeight: 'bold',
+        fontSize: 14,
     },
 });

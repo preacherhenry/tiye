@@ -58,7 +58,7 @@ const Sidebar = React.memo(({ isOpen, onClose, user, onUploadPhoto, onLogout, na
                 <ScrollView style={styles.menuItems}>
                     <TouchableOpacity style={styles.menuItem} onPress={() => { navigation.navigate('DriverRides'); onClose(); }}><Text style={styles.menuText}>🚖 My Rides</Text></TouchableOpacity>
                     <TouchableOpacity style={styles.menuItem} onPress={() => { navigation.navigate('DriverEarnings'); onClose(); }}><Text style={styles.menuText}>💰 Earnings</Text></TouchableOpacity>
-                    <TouchableOpacity style={styles.menuItem} onPress={() => { navigation.navigate('Subscription'); onClose(); }}><Text style={styles.menuText}>💳 Subscription</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.menuItem} onPress={() => { navigation.navigate('Wallet'); onClose(); }}><Text style={styles.menuText}>💳 My Wallet</Text></TouchableOpacity>
                     <TouchableOpacity style={styles.menuItem} onPress={() => { navigation.navigate('DriverSettings'); onClose(); }}><Text style={styles.menuText}>⚙️ Settings</Text></TouchableOpacity>
                     <TouchableOpacity style={styles.menuItem} onPress={() => { navigation.navigate('DriverSupport'); onClose(); }}><Text style={styles.menuText}>❓ Support</Text></TouchableOpacity>
                 </ScrollView>
@@ -77,9 +77,8 @@ export const DriverDashboard = ({ navigation }: any) => {
     const [location, setLocation] = useState<any>(null);
     const [pendingRides, setPendingRides] = useState<any[]>([]);
     const [activeRide, setActiveRide] = useState<any>(null);
-    // isOnline will now reflect if a driver has an active subscription.
-    // If not active, polling for rides will stop and they will appear offline to others.
-    const [isOnline, setIsOnline] = useState(user?.subscription_status === 'active');
+    // isOnline will now reflect if a driver has enough wallet balance
+    const [isOnline, setIsOnline] = useState((user?.wallet_balance || 0) >= 5);
 
     // Trip Distance Tracking
     const [rideDistance, setRideDistance] = useState(0);
@@ -107,8 +106,8 @@ export const DriverDashboard = ({ navigation }: any) => {
     };
 
     useEffect(() => {
-        setIsOnline(user?.subscription_status === 'active');
-    }, [user?.subscription_status]);
+        setIsOnline((user?.wallet_balance || 0) >= 5);
+    }, [user?.wallet_balance]);
 
     const [isLoading, setIsLoading] = useState(false);
     const [localPhoto, setLocalPhoto] = useState(user?.profile_photo);
@@ -689,19 +688,17 @@ export const DriverDashboard = ({ navigation }: any) => {
             </TouchableOpacity>
 
             {!isOnline && (
-                <View style={[styles.subscriptionWarning, { backgroundColor: user?.subscription_status === 'pending' ? '#3498db' : '#e74c3c' }]}>
+                <View style={[styles.subscriptionWarning, { backgroundColor: '#e74c3c' }]}>
                     <Text style={styles.warningText}>
-                        {user?.subscription_status === 'pending'
-                            ? "⏳ Payment verification in progress..."
-                            : "⛔ No Active Subscription. You cannot receive rides."}
+                        {(user?.wallet_balance || 0) < 5 
+                            ? "⛔ Low Balance: K5 required to receive rides."
+                            : "⏳ Account status restricted."}
                     </Text>
                     <TouchableOpacity
                         style={styles.warningButton}
-                        onPress={() => navigation.navigate('Subscription')}
+                        onPress={() => navigation.navigate('Wallet')}
                     >
-                        <Text style={styles.warningButtonText}>
-                            {user?.subscription_status === 'pending' ? "CHECK STATUS" : "PAY NOW"}
-                        </Text>
+                        <Text style={styles.warningButtonText}>TOP UP</Text>
                     </TouchableOpacity>
                 </View>
             )}
@@ -721,9 +718,7 @@ export const DriverDashboard = ({ navigation }: any) => {
                                         <Text style={styles.pickup}>📍 {ride.pickup_location}</Text>
                                         <Text style={styles.destination}>🏁 {ride.destination}{ride.is_manual_destination ? " (Custom)" : ""}</Text>
                                         <Text style={styles.fare}>
-                                            {ride.is_manual_destination
-                                                ? "💰 Calculated at destination"
-                                                : `💰 K${ride.fare} • ${ride.distance}km`}
+                                            💰 Fare visible after acceptance
                                         </Text>
                                     </View>
                                     <View style={{ flexDirection: 'row' }}>
