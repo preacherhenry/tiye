@@ -349,13 +349,34 @@ export const updateRideStatus = async (req: Request, res: Response) => {
 
         await db.runTransaction(async (transaction) => {
             const rideRef = db.collection('rides').doc(String(ride_id));
-            const rideDoc = await transaction.get(rideRef);
+            const settingsRef = db.collection('settings');
+            const baseFareDocRef = settingsRef.doc('base_fare');
+            const rateDocRef = settingsRef.doc('price_per_km');
+            const deductionDocRef = settingsRef.doc('trip_deduction');
 
+            // 1. PERFORM ALL READS FIRST
+            const rideDoc = await transaction.get(rideRef);
             if (!rideDoc.exists) {
                 throw new Error('Ride not found');
             }
-
             const ride = rideDoc.data()!;
+            
+            let baseFareDoc, rateDoc, deductionDoc;
+            if (status === 'completed') {
+                [baseFareDoc, rateDoc, deductionDoc] = await Promise.all([
+                    transaction.get(baseFareDocRef),
+                    transaction.get(rateDocRef),
+                    transaction.get(deductionDocRef)
+                ]);
+            }
+
+            let driverDoc;
+            if ((status === 'completed' || status === 'cancelled') && ride.driver_id) {
+                const driverRef = db.collection('drivers').doc(String(ride.driver_id));
+                driverDoc = await transaction.get(driverRef);
+            }
+
+            // 2. NOW PERFORM WRITES
             finalFare = ride.fare;
             finalDistance = ride.distance;
 
@@ -363,12 +384,8 @@ export const updateRideStatus = async (req: Request, res: Response) => {
             if (status === 'completed' && ride.is_manual_destination) {
                 console.log(`📏 Calculating fare for manual trip ${ride_id}. Reported distance: ${distance}km`);
 
-                const settingsRef = db.collection('settings');
-                const baseFareDoc = await settingsRef.doc('base_fare').get();
-                const rateDoc = await settingsRef.doc('price_per_km').get();
-
-                const baseFare = Number(baseFareDoc.data()?.value || 20);
-                const rate = Number(rateDoc.data()?.value || 10);
+                const baseFare = Number(baseFareDoc?.data()?.value || 20);
+                const rate = Number(rateDoc?.data()?.value || 10);
 
                 const actualDistance = Number(distance) || 0;
                 finalFare = Math.round(baseFare + (actualDistance * rate));
@@ -390,9 +407,8 @@ export const updateRideStatus = async (req: Request, res: Response) => {
             }
 
             // If trip ended, set driver back to online
-            if ((status === 'completed' || status === 'cancelled') && ride.driver_id) {
+            if ((status === 'completed' || status === 'cancelled') && ride.driver_id && driverDoc) {
                 const driverRef = db.collection('drivers').doc(String(ride.driver_id));
-                const driverDoc = await transaction.get(driverRef);
                 const driverData = driverDoc.data();
 
                 const updateData: any = {
@@ -402,9 +418,7 @@ export const updateRideStatus = async (req: Request, res: Response) => {
 
                 // AUTOMATIC TRIP DEDUCTION
                 if (status === 'completed') {
-                    const settingsRef = db.collection('settings');
-                    const deductionDoc = await settingsRef.doc('trip_deduction').get();
-                    const deductionAmount = Number(deductionDoc.data()?.value || 3);
+                    const deductionAmount = Number(deductionDoc?.data()?.value || 3);
 
                     const currentBalance = driverData?.wallet_balance || 0;
                     const newBalance = currentBalance - deductionAmount;
