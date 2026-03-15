@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getPendingApplications, getRejectedApplications, getAnalyticsStats, getDashboardStats, getAllDrivers, toggleDriverStatus, getDriverProfile, getTripDetails, approveApplication, rejectApplication, getApplicationDetails, verifyDocument, getAllAdmins, createAdmin, toggleAdminStatus, updateAdminRole, updateAdminProfile, changePassword, uploadAdminProfilePhoto, getLoginHistory, getPassengers, updateUserStatus, getPassengerProfile } from '../controllers/adminController';
+import { getPendingApplications, getRejectedApplications, getAnalyticsStats, getDashboardStats, getAllDrivers, toggleDriverStatus, getDriverProfile, getTripDetails, approveApplication, rejectApplication, getApplicationDetails, verifyDocument, getAllAdmins, createAdmin, toggleAdminStatus, updateAdminRole, updateAdminProfile, changePassword, uploadAdminProfilePhoto, getLoginHistory, getPassengers, updateUserStatus, getPassengerProfile, getLiveTrips, getAdminTrips } from '../controllers/adminController';
 import { authenticateToken } from '../middleware/authMiddleware';
 import { authorize } from '../middleware/rbacMiddleware';
 import multer from 'multer';
@@ -29,6 +29,8 @@ router.get('/drivers', authorize('driver:manage'), getAllDrivers);
 router.post('/drivers/:id/status', authorize('driver:manage'), toggleDriverStatus);
 router.get('/drivers/:id/profile', authorize('driver:manage'), getDriverProfile);
 router.get('/trips/:id', authorize('ride:monitor'), getTripDetails);
+router.get('/live-trips', authorize('ride:monitor'), getLiveTrips);
+router.get('/trips', authorize('ride:monitor'), getAdminTrips);
 router.get('/applications/:id', authorize('driver:manage'), getApplicationDetails);
 router.post('/applications/:id/approve', authorize('driver:approve'), approveApplication);
 router.post('/applications/:id/reject', authorize('driver:approve'), rejectApplication);

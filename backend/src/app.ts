@@ -15,6 +15,7 @@ import fareRoutes from './routes/fareRoutes';
 import messageRoutes from './routes/messageRoutes';
 import walletRoutes from './routes/walletRoutes';
 import financialSettingsRoutes from './routes/financialSettingsRoutes';
+import { startCleanupJob } from './jobs/cleanupTrips';
 
 dotenv.config();
 
@@ -81,6 +82,7 @@ import { checkLowBalanceDrivers } from './controllers/driverController';
 // Start Background Jobs
 console.log('⏰ Starting 1m Wallet Balance Check...');
 setInterval(checkLowBalanceDrivers, 60000); // 1 minute
+startCleanupJob();
 
 if (require.main === module) {
     app.listen(PORT, () => {

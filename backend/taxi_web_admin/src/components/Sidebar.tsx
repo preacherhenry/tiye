@@ -14,7 +14,9 @@ import {
     CreditCard,
     Map,
     MapPin,
-    MessageSquare
+    MessageSquare,
+    Crosshair,
+    History
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
@@ -55,6 +57,8 @@ const Sidebar: React.FC = () => {
         }
 
         if (hasPermission(user?.role, 'ride:monitor')) {
+            items.push({ icon: Crosshair, label: 'Security Map', path: '/security-map' });
+            items.push({ icon: History, label: 'Trip History', path: '/trip-history' });
             items.push({ icon: User, label: 'Passengers', path: '/passengers' });
         }
 

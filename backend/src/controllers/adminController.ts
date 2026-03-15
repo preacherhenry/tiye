@@ -1016,3 +1016,131 @@ export const getPassengerProfile = async (req: Request, res: Response) => {
         res.json({ success: false, message: error.message });
     }
 };
+
+export const getLiveTrips = async (req: Request, res: Response) => {
+    try {
+        const ridesSnapshot = await db.collection('rides')
+            .where('status', 'in', ['accepted', 'arrived', 'in_progress'])
+            .get();
+
+        const activeTrips = await Promise.all(ridesSnapshot.docs.map(async (doc) => {
+            const tripData = doc.data();
+            
+            // Get Driver details and live location from drivers collection
+            const driverProfileDoc = await db.collection('drivers').doc(tripData.driver_id).get();
+            const driverProfileData = driverProfileDoc.data() || {};
+            
+            // Get user basic info
+            const passengerUserDoc = await db.collection('users').doc(tripData.passenger_id).get();
+            const passengerUserData = passengerUserDoc.data() || {};
+            
+            const driverUserDoc = await db.collection('users').doc(tripData.driver_id).get();
+            const driverUserData = driverUserDoc.data() || {};
+
+            return {
+                id: doc.id,
+                passenger_id: tripData.passenger_id,
+                passenger_name: passengerUserData.name,
+                passenger_phone: passengerUserData.phone,
+                passenger_lat: passengerUserData.current_lat,
+                passenger_lng: passengerUserData.current_lng,
+                
+                driver_id: tripData.driver_id,
+                driver_name: driverUserData.name,
+                driver_phone: driverUserData.phone,
+                car_model: driverProfileData.car_model,
+                plate_number: driverProfileData.plate_number,
+                vehicle_class: driverProfileData.vehicle_class,
+                
+                pickup_lat: tripData.pickup_lat,
+                pickup_lng: tripData.pickup_lng,
+                pickup_location: tripData.pickup_location,
+                
+                dest_lat: tripData.dropoff_lat,
+                dest_lng: tripData.dropoff_lng,
+                destination: tripData.destination,
+                
+                current_lat: driverProfileData.current_lat,
+                current_lng: driverProfileData.current_lng,
+                heading: driverProfileData.heading,
+                last_seen_at: driverProfileData.last_seen_at,
+                
+                status: tripData.status
+            };
+        }));
+        
+        res.json({ success: true, trips: activeTrips });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export const getAdminTrips = async (req: Request, res: Response) => {
+    const { page = 1, limit = 10, search = '', status = '', date = '' } = req.query;
+    
+    try {
+        let query: any = db.collection('rides');
+
+        // Apply filters
+        if (status) {
+            query = query.where('status', '==', status);
+        }
+
+        // Fetch all matching (or filtered) rides first to handle complex searching/filtering in memory 
+        // because of Firestore query limitations (specifically searching by passenger name which is in a different doc)
+        const snapshot = await query.get();
+        let trips = await Promise.all(snapshot.docs.map(async (doc: any) => {
+            const trip = doc.data();
+            const [passDoc, driverUserDoc] = await Promise.all([
+                db.collection('users').doc(trip.passenger_id).get(),
+                trip.driver_id ? db.collection('users').doc(trip.driver_id).get() : Promise.resolve(null)
+            ]);
+            
+            const passenger = passDoc.data() || {};
+            const driver = driverUserDoc?.data() || {};
+
+            return {
+                ...trip,
+                id: doc.id,
+                passenger_name: passenger.name || 'N/A',
+                passenger_phone: passenger.phone || 'N/A',
+                driver_name: driver.name || 'N/A',
+                driver_phone: driver.phone || 'N/A'
+            };
+        }));
+
+        // Search Filter (In-memory)
+        if (search) {
+            const s = String(search).toLowerCase();
+            trips = trips.filter(t => 
+                t.passenger_name.toLowerCase().includes(s) || 
+                t.driver_name.toLowerCase().includes(s) ||
+                t.id.toLowerCase().includes(s)
+            );
+        }
+
+        // Date Filter (In-memory)
+        if (date) {
+            trips = trips.filter(t => t.created_at.startsWith(String(date)));
+        }
+
+        // Sort by date desc
+        trips.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+        // Pagination
+        const totalItems = trips.length;
+        const totalPages = Math.ceil(totalItems / Number(limit));
+        const startIndex = (Number(page) - 1) * Number(limit);
+        const paginatedTrips = trips.slice(startIndex, startIndex + Number(limit));
+
+        res.json({
+            success: true,
+            trips: paginatedTrips,
+            totalItems,
+            totalPages,
+            currentPage: Number(page)
+        });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};

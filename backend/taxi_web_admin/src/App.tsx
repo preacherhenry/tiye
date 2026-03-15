@@ -12,6 +12,8 @@ import DriverSubscriptions from './pages/DriverSubscriptions';
 import Passengers from './pages/Passengers';
 import PassengerProfile from './pages/PassengerProfile';
 import TripDetails from './pages/TripDetails';
+import ActiveTripsMap from './pages/ActiveTripsMap';
+import TripHistory from './pages/TripHistory';
 import AdminPanel from './pages/AdminPanel';
 import Settings from './pages/Settings';
 import Promotions from './pages/Promotions';
@@ -69,6 +71,8 @@ const App: React.FC = () => {
             <Route path="passengers" element={<PermissionRoute permission="ride:monitor"><Passengers /></PermissionRoute>} />
             <Route path="passengers/:id" element={<PermissionRoute permission="ride:monitor"><PassengerProfile /></PermissionRoute>} />
             <Route path="trips/:id" element={<PermissionRoute permission="ride:monitor"><TripDetails /></PermissionRoute>} />
+            <Route path="trip-history" element={<PermissionRoute permission="ride:monitor"><TripHistory /></PermissionRoute>} />
+            <Route path="security-map" element={<PermissionRoute permission="ride:monitor"><ActiveTripsMap /></PermissionRoute>} />
             <Route path="promotions" element={<PermissionRoute permission="report:view_all"><Promotions /></PermissionRoute>} />
             <Route path="subscriptions" element={<PermissionRoute permission="finance:dashboard"><Subscriptions /></PermissionRoute>} />
             <Route path="fares" element={<PermissionRoute permission="report:view_all"><Fares /></PermissionRoute>} />

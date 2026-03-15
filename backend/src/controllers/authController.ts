@@ -140,7 +140,11 @@ export const login = async (req: Request, res: Response) => {
             if (user.role === 'driver') {
                 const driverDoc = await db.collection('drivers').doc(user.id).get();
                 if (driverDoc.exists) {
-                    vehicleInfo = driverDoc.data() || {};
+                    const driverData = driverDoc.data() || {};
+                    vehicleInfo = {
+                        ...driverData,
+                        subscription_status: 'active'
+                    };
                 }
             }
 
@@ -452,24 +456,52 @@ export const updateProfile = async (req: Request, res: Response) => {
             phone
         });
 
+        // 2. Merge driver info if applicable
         const userDoc = await db.collection('users').doc(userId).get();
         const user = userDoc.data();
 
-        if (!user) {
-            res.json({ success: false, message: 'User not found' });
+        if (user && user.role === 'driver') {
+            const driverDoc = await db.collection('drivers').doc(userId).get();
+            if (driverDoc.exists) {
+                const driverData = driverDoc.data();
+                await db.collection('users').doc(userId).update({
+                    ...driverData,
+                    id: userId,
+                    role: 'driver'
+                });
+            }
+        }
+
+        const updatedUserDoc = await db.collection('users').doc(userId).get();
+        const updatedUser = updatedUserDoc.data();
+
+        if (!updatedUser) {
+            res.json({ success: false, message: 'User not found after update' });
             return;
+        }
+
+        let driverInfo = {};
+        if (updatedUser.role === 'driver') {
+            const driverDoc = await db.collection('drivers').doc(userId).get();
+            if (driverDoc.exists) {
+                driverInfo = driverDoc.data() || {};
+            }
         }
 
         res.json({
             success: true,
             message: 'Profile updated successfully',
             user: {
-                id: user.id || userDoc.id,
-                name: user.name,
-                email: user.email,
-                phone: user.phone,
-                role: user.role,
-                profile_photo: fixPhotoUrl(user.profile_photo, req),
+                id: updatedUser.id || updatedUserDoc.id,
+                name: updatedUser.name,
+                email: updatedUser.email,
+                phone: updatedUser.phone,
+                role: updatedUser.role,
+                profile_photo: fixPhotoUrl(updatedUser.profile_photo, req),
+                ...driverInfo,
+                // Transition guards
+                subscription_status: 'active',
+                wallet_balance: (driverInfo as any).wallet_balance || 0
             }
         });
     } catch (error: any) {
@@ -497,12 +529,13 @@ export const getUserProfile = async (req: Request, res: Response) => {
         if (user.role === 'driver') {
             const driverDoc = await db.collection('drivers').doc(userId).get();
             if (driverDoc.exists) {
-                const driver = driverDoc.data();
-                if (driver) {
+                const driverData = driverDoc.data();
+                if (driverData) {
                     driverInfo = {
+                        ...driverData,
                         // FORCE ACTIVE for transition to wallet model (stops legacy app auto-logout)
                         subscription_status: 'active',
-                        subscription_expiry: driver.subscription_expiry
+                        wallet_balance: driverData.wallet_balance || 0
                     };
                 }
             }
