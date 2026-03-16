@@ -48,10 +48,17 @@ const Sidebar: React.FC = () => {
     }, [user]);
 
     const navItems = React.useMemo(() => {
-        const items = [
+        const items: { icon: any; label: string; path: string; badge?: number }[] = [
             { icon: LayoutDashboard, label: 'Overview', path: '/' },
-            { icon: MessageSquare, label: 'Messages', path: '/messages', badge: unreadCount },
         ];
+        
+        if (hasPermission(user?.role, 'marketplace:manage')) {
+            items.push({ icon: ShoppingBag, label: 'Marketplace', path: '/marketplace' });
+        }
+
+        items.push(
+            { icon: MessageSquare, label: 'Messages', path: '/messages', badge: unreadCount },
+        );
 
         if (hasPermission(user?.role, 'driver:manage')) {
             items.push({ icon: Users, label: 'Drivers', path: '/drivers' });
@@ -87,9 +94,6 @@ const Sidebar: React.FC = () => {
             items.push({ icon: ShieldCheck, label: 'Admin Panel', path: '/admin' });
         }
 
-        if (hasPermission(user?.role, 'marketplace:manage')) {
-            items.push({ icon: ShoppingBag, label: 'Marketplace', path: '/marketplace' });
-        }
 
         items.push({ icon: Settings, label: 'Settings', path: '/settings' });
         return items;

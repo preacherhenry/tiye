@@ -88,6 +88,6 @@ export const getAllPermissions = (role: string): Permission[] => {
 
 export const hasPermission = (role: string | undefined, permission: Permission): boolean => {
     if (!role) return false;
-    const allPerms = getAllPermissions(role);
+    const allPerms = getAllPermissions(role.toLowerCase());
     return allPerms.includes(permission);
 };
