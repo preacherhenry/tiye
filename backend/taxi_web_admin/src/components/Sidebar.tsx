@@ -16,7 +16,10 @@ import {
     MapPin,
     MessageSquare,
     Crosshair,
-    History
+    History,
+    ShoppingBag,
+    Store,
+    Image as ImageIcon
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
@@ -82,6 +85,9 @@ const Sidebar: React.FC = () => {
 
         if (hasPermission(user?.role, 'user:manage')) {
             items.push({ icon: ShieldCheck, label: 'Admin Panel', path: '/admin' });
+            items.push({ icon: ShoppingBag, label: 'Posters', path: '/posters' });
+            items.push({ icon: Store, label: 'Stores', path: '/stores' });
+            items.push({ icon: ImageIcon, label: 'Inventory', path: '/inventory' });
         }
 
         items.push({ icon: Settings, label: 'Settings', path: '/settings' });

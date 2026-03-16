@@ -15,6 +15,7 @@ import fareRoutes from './routes/fareRoutes';
 import messageRoutes from './routes/messageRoutes';
 import walletRoutes from './routes/walletRoutes';
 import financialSettingsRoutes from './routes/financialSettingsRoutes';
+import marketplaceRoutes from './routes/marketplaceRoutes';
 import { startCleanupJob } from './jobs/cleanupTrips';
 
 dotenv.config();
@@ -71,6 +72,7 @@ app.use('/fares', fareRoutes);
 app.use('/messages', messageRoutes);
 app.use('/wallet', walletRoutes);
 app.use('/financial-settings', financialSettingsRoutes);
+app.use('/market', marketplaceRoutes);
 
 app.get('/', (req: Request, res: Response) => {
     // Last deploy trigger: 2026-03-09 00:40
