@@ -18,6 +18,7 @@ export type Permission =
     | 'driver:approve'
     | 'finance:view_docs'
     | 'financial:manage'      // Administrative financial control (Super Admin/Director)
+    | 'marketplace:manage'    // Manage marketplace posters, stores, and inventory
     | 'admin:dashboard';       // Basic admin dashboard access
 
 export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
@@ -27,6 +28,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
         'finance:view_docs',
         'driver:approve',
         'financial:manage',
+        'marketplace:manage',
         'admin:dashboard'
     ],
     director_ceo: [
@@ -34,6 +36,7 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
         'finance:view_docs',
         'driver:approve',
         'financial:manage',
+        'marketplace:manage',
         'admin:dashboard'
     ],
     finance_manager: [

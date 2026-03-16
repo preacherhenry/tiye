@@ -13,6 +13,7 @@ import {
 
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { hasPermission } from '../utils/rbac';
 
 export const Overview: React.FC = () => {
     const { user } = useAuth();
@@ -139,6 +140,35 @@ export const Overview: React.FC = () => {
                     </button>
                 </div>
             </div>
+
+            {hasPermission(user?.role, 'marketplace:manage') && (
+                <div className="glass p-8 rounded-[2rem] border border-white/5 bg-gradient-to-br from-primary/5 to-transparent">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <h3 className="text-2xl font-bold mb-1">Marketplace Ecosystem</h3>
+                            <p className="text-gray-400 text-sm">Monitor your advertising slots and partner stores</p>
+                        </div>
+                        <div className="flex space-x-3">
+                            <button onClick={() => window.location.href='/posters'} className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold transition-all underline">MANAGE POSTERS</button>
+                            <button onClick={() => window.location.href='/stores'} className="px-4 py-2 bg-primary text-black rounded-xl text-xs font-bold transition-all shadow-lg shadow-primary/20">VIEW ALL STORES</button>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+                            <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-2">Active Posters</p>
+                            <p className="text-2xl font-black text-primary">8 / 8</p>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+                            <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-2">Partner Stores</p>
+                            <p className="text-2xl font-black">Active</p>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+                            <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mb-2">Inventory Items</p>
+                            <p className="text-2xl font-black">Managed</p>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
