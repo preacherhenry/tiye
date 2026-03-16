@@ -55,8 +55,8 @@ export const ROLE_PERMISSIONS: Record<string, Permission[]> = {
         'admin:dashboard'
     ],
     operations_supervisor: ['ride:monitor', 'ride:allocate', 'ride:issues', 'admin:dashboard'],
-    it_manager: ['system:health', 'system:infrastructure', 'admin:dashboard'],
-    system_admin_developer: ['system:technical', 'admin:dashboard'],
+    it_manager: ['system:health', 'system:infrastructure', 'marketplace:manage', 'admin:dashboard'],
+    system_admin_developer: ['system:technical', 'marketplace:manage', 'admin:dashboard'],
     driver: [],
     passenger: []
 };

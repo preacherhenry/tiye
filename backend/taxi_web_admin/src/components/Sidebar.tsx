@@ -88,9 +88,7 @@ const Sidebar: React.FC = () => {
         }
 
         if (hasPermission(user?.role, 'marketplace:manage')) {
-            items.push({ icon: ShoppingBag, label: 'Posters', path: '/posters' });
-            items.push({ icon: Store, label: 'Stores', path: '/stores' });
-            items.push({ icon: ImageIcon, label: 'Inventory', path: '/inventory' });
+            items.push({ icon: ShoppingBag, label: 'Marketplace', path: '/marketplace' });
         }
 
         items.push({ icon: Settings, label: 'Settings', path: '/settings' });

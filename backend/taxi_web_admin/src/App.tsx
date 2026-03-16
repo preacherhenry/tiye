@@ -23,6 +23,7 @@ import Fares from './pages/Fares';
 import Places from './pages/Places';
 import FinancialSettings from './pages/FinancialSettings';
 import WalletApprovals from './pages/WalletApprovals';
+import Marketplace from './pages/Marketplace';
 import Posters from './pages/Posters';
 import Stores from './pages/Stores';
 import Inventory from './pages/Inventory';
@@ -82,6 +83,7 @@ const App: React.FC = () => {
             <Route path="places" element={<PermissionRoute permission="report:view_all"><Places /></PermissionRoute>} />
             <Route path="financial-settings" element={<PermissionRoute permission="financial:manage"><FinancialSettings /></PermissionRoute>} />
             <Route path="wallet-approvals" element={<PermissionRoute permission="finance:approve"><WalletApprovals /></PermissionRoute>} />
+            <Route path="marketplace" element={<PermissionRoute permission="marketplace:manage"><Marketplace /></PermissionRoute>} />
             <Route path="posters" element={<PermissionRoute permission="marketplace:manage"><Posters /></PermissionRoute>} />
             <Route path="stores" element={<PermissionRoute permission="marketplace:manage"><Stores /></PermissionRoute>} />
             <Route path="inventory" element={<PermissionRoute permission="marketplace:manage"><Inventory /></PermissionRoute>} />
