@@ -19,7 +19,8 @@ import {
     CreditCard,
     Pause,
     Play,
-    Trash2
+    Trash2,
+    Settings
 } from 'lucide-react';
 
 const DriverProfile: React.FC = () => {
@@ -82,6 +83,26 @@ const DriverProfile: React.FC = () => {
         } catch (error: any) {
             console.error('Delete error:', error);
             alert(error.response?.data?.message || 'Error occurred while deleting');
+        }
+    };
+
+    const updateVehicleClass = async (newClass: string) => {
+        if (!window.confirm(`Change vehicle class to ${newClass}?`)) return;
+
+        try {
+            const res = await api.patch(`/admin/drivers/${id}/vehicle-class`, { vehicle_class: newClass });
+            if (res.data.success) {
+                setData({
+                    ...data,
+                    driver: { ...data.driver, vehicle_class: newClass }
+                });
+                alert('Vehicle class updated');
+            } else {
+                alert(res.data.message);
+            }
+        } catch (error: any) {
+            console.error('Update vehicle class error:', error);
+            alert(error.response?.data?.message || 'Error updating vehicle class');
         }
     };
 
@@ -279,7 +300,21 @@ const DriverProfile: React.FC = () => {
                     <div className="absolute bottom-0 right-0 p-8 opacity-5">
                         <Car className="w-32 h-32" />
                     </div>
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] mb-8 text-gray-500 border-b border-white/5 pb-4">Vehicle Assets</h3>
+                    <div className="flex items-center justify-between mb-8 border-b border-white/5 pb-4">
+                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Vehicle Assets</h3>
+                        <div className="flex items-center space-x-2">
+                            <span className="text-[10px] font-black text-gray-500 uppercase">Class:</span>
+                            <select 
+                                value={driver.vehicle_class || 'Taxi'} 
+                                onChange={(e) => updateVehicleClass(e.target.value)}
+                                className="bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-xs font-bold text-primary focus:outline-none focus:border-primary/50 cursor-pointer"
+                            >
+                                <option value="Taxi" className="bg-gray-900">Taxi</option>
+                                <option value="Comfort" className="bg-gray-900">Comfort</option>
+                                <option value="Comfort Plus" className="bg-gray-900">Comfort Plus</option>
+                            </select>
+                        </div>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
                         <div>
                             <p className="text-gray-500 text-[10px] uppercase font-bold mb-1 tracking-widest">Car Model</p>

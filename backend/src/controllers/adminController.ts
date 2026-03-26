@@ -1273,3 +1273,41 @@ export const deletePassenger = async (req: Request, res: Response) => {
         res.json({ success: false, message: error.message });
     }
 };
+
+export const updateDriverVehicleClass = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { vehicle_class } = req.body;
+    const adminId = (req as any).user?.id || null;
+
+    if (!vehicle_class) {
+        return res.json({ success: false, message: 'Vehicle class is required' });
+    }
+
+    try {
+        const driverRef = db.collection('drivers').doc(id);
+        const driverDoc = await driverRef.get();
+
+        if (!driverDoc.exists) {
+            return res.json({ success: false, message: 'Driver record not found' });
+        }
+
+        await driverRef.update({
+            vehicle_class,
+            updated_at: new Date().toISOString()
+        });
+
+        // Audit log
+        await db.collection('audit_logs').add({
+            user_id: adminId,
+            action: 'update_driver_vehicle_class',
+            target_type: 'driver',
+            target_id: id,
+            details: JSON.stringify({ new_class: vehicle_class }),
+            timestamp: new Date().toISOString()
+        });
+
+        res.json({ success: true, message: 'Vehicle class updated successfully' });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
