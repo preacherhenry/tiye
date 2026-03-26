@@ -11,7 +11,8 @@ import {
     User,
     Car,
     Calendar,
-    Eye
+    Eye,
+    Trash2
 } from 'lucide-react';
 
 const ApplicationDetail: React.FC = () => {
@@ -33,7 +34,15 @@ const ApplicationDetail: React.FC = () => {
         try {
             const res = await api.get(`/admin/applications/${id}`);
             if (res.data.success) {
-                setData(res.data);
+                const order = ['profile_photo', 'nrc_front', 'nrc_back', 'license_front', 'license_back', 'car_front', 'car_back', 'car_side_left', 'car_side_right', 'car_interior'];
+                const sortedDocs = [...res.data.documents].sort((a: any, b: any) => {
+                    const indexA = order.indexOf(a.doc_type?.toLowerCase().trim());
+                    const indexB = order.indexOf(b.doc_type?.toLowerCase().trim());
+                    const finalA = indexA === -1 ? 99 : indexA;
+                    const finalB = indexB === -1 ? 99 : indexB;
+                    return finalA - finalB;
+                });
+                setData({ ...res.data, documents: sortedDocs });
             }
         } catch (error) {
             console.error('Fetch error:', error);
@@ -90,6 +99,25 @@ const ApplicationDetail: React.FC = () => {
         }
     };
 
+    const handleDeleteApp = async () => {
+        if (!window.confirm('Are you sure you want to PERMANENTLY delete this application and all its documents? This cannot be undone.')) return;
+        
+        setProcessing(true);
+        try {
+            const res = await api.delete(`/admin/applications/${id}`);
+            if (res.data.success) {
+                navigate('/applications');
+            } else {
+                alert(res.data.message);
+            }
+        } catch (error: any) {
+            console.error('Delete error:', error);
+            alert(error.response?.data?.message || 'Error occurred while deleting');
+        } finally {
+            setProcessing(false);
+        }
+    };
+
     if (loading) return <div className="p-20 text-center text-gray-400">Loading details...</div>;
     if (!data) return <div className="p-20 text-center text-red-500">Application not found</div>;
 
@@ -115,10 +143,18 @@ const ApplicationDetail: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="flex space-x-3">
+                <div className="flex space-x-3 text-right">
+                    <button
+                        onClick={handleDeleteApp}
+                        disabled={processing}
+                        className="px-4 py-3 bg-red-600/10 text-red-600 rounded-xl font-bold hover:bg-red-600 hover:text-white transition-all flex items-center"
+                        title="Permanently Delete Application"
+                    >
+                        <Trash2 className="w-5 h-5" />
+                    </button>
                     <button
                         onClick={() => { setRejectType({ type: 'app' }); setShowRejectModal(true); }}
-                        className="px-6 py-3 bg-red-500/10 text-red-500 rounded-xl font-bold hover:bg-red-500 hover:text-white transition-all"
+                        className="px-6 py-3 bg-white/5 text-gray-400 rounded-xl font-bold hover:bg-white/10 hover:text-white transition-all"
                     >
                         Reject Application
                     </button>
@@ -191,7 +227,7 @@ const ApplicationDetail: React.FC = () => {
                                 <div className="relative h-48 bg-black/40">
                                     <img src={doc.file_path} alt={doc.doc_type} className="w-full h-full object-contain" />
                                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center space-x-4">
-                                        <a href={doc.file_path} target="_blank" className="p-3 bg-white/10 rounded-full hover:bg-white/20"><Eye className="w-5 h-5" /></a>
+                                        <a href={doc.file_path} target="_blank" className="p-3 bg-white/10 rounded-full hover:bg-white/20" rel="noreferrer"><Eye className="w-5 h-5" /></a>
                                         <a href={doc.file_path} download className="p-3 bg-white/10 rounded-full hover:bg-white/20"><Download className="w-5 h-5" /></a>
                                     </div>
                                 </div>

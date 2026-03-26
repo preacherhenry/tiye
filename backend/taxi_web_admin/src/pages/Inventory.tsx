@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import api from '../services/api';
 import { Package, Plus, Search, Edit2, Trash2, Upload, X, Save, DollarSign, Layers } from 'lucide-react';
 
 const Inventory = () => {
+    const { storeId } = useParams();
     const [items, setItems] = useState<any[]>([]);
     const [stores, setStores] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [selectedStore, setSelectedStore] = useState('');
+    const [selectedStore, setSelectedStore] = useState(storeId || '');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<any>(null);
     const [formData, setFormData] = useState({
@@ -188,7 +190,7 @@ const Inventory = () => {
                                                 {item.image_url ? (
                                                     <img 
                                                         src={item.image_url.startsWith('http') ? item.image_url : `${api.defaults.baseURL?.replace('/admin', '')}${item.image_url}`} 
-                                                        className="w-full h-full object-cover" 
+                                                        className="w-full h-full object-contain bg-white/5" 
                                                         alt={item.item_name}
                                                     />
                                                 ) : (
@@ -258,7 +260,7 @@ const Inventory = () => {
                             <div className="flex flex-col items-center mb-6">
                                 <div className="w-32 h-32 bg-white/5 rounded-3xl border border-white/10 relative group overflow-hidden flex items-center justify-center shadow-2xl">
                                     {formData.previewUrl ? (
-                                        <img src={formData.previewUrl} className="w-full h-full object-cover" />
+                                        <img src={formData.previewUrl} className="w-full h-full object-contain bg-white/5" />
                                     ) : (
                                         <Package className="w-12 h-12 text-gray-500" />
                                     )}

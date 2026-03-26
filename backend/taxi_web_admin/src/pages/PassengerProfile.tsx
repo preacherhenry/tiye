@@ -6,7 +6,8 @@ import {
     Calendar,
     ArrowLeft,
     Clock,
-    Car
+    Car,
+    Trash2
 } from 'lucide-react';
 import api from '../services/api';
 
@@ -33,6 +34,22 @@ const PassengerProfile: React.FC = () => {
         }
     };
 
+    const handleDelete = async () => {
+        if (!window.confirm(`Are you sure you want to PERMANENTLY delete passenger "${profile.user.name}" and all associated wallet records? This cannot be undone.`)) return;
+
+        try {
+            const res = await api.delete(`/admin/passengers/${id}`);
+            if (res.data.success) {
+                navigate('/passengers');
+            } else {
+                alert(res.data.message);
+            }
+        } catch (error: any) {
+            console.error('Delete error:', error);
+            alert(error.response?.data?.message || 'Error occurred while deleting');
+        }
+    };
+
     if (loading) return <div className="p-10 text-center text-gray-400">Loading profile...</div>;
     if (!profile) return <div className="p-10 text-center text-red-500">Passenger not found</div>;
 
@@ -56,12 +73,21 @@ const PassengerProfile: React.FC = () => {
                             <span className="flex items-center"><Phone className="w-4 h-4 mr-2" /> {user.phone}</span>
                         </div>
                     </div>
-                    <span className={`px-4 py-2 rounded-xl text-sm font-bold uppercase tracking-wider ${user.status === 'active'
-                        ? 'bg-green-500/10 text-green-500 border border-green-500/20'
-                        : 'bg-red-500/10 text-red-500 border border-red-500/20'
-                        }`}>
-                        {user.status}
-                    </span>
+                    <div className="flex items-center space-x-3">
+                        <span className={`px-4 py-2 rounded-xl text-sm font-bold uppercase tracking-wider ${user.status === 'active'
+                            ? 'bg-green-500/10 text-green-500 border border-green-500/20'
+                            : 'bg-red-500/10 text-red-500 border border-red-500/20'
+                            }`}>
+                            {user.status}
+                        </span>
+                        <button
+                            onClick={handleDelete}
+                            className="p-2 bg-red-600/10 text-red-600 border border-red-600/20 rounded-xl font-bold hover:bg-red-600 hover:text-white transition-all shadow-lg shadow-red-500/10"
+                            title="Permanently Delete Passenger"
+                        >
+                            <Trash2 className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
             </div>
 

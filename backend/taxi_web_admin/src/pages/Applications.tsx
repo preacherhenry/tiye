@@ -8,7 +8,8 @@ import {
     CheckCircle,
     Clock,
     AlertCircle,
-    XCircle
+    XCircle,
+    Trash2
 } from 'lucide-react';
 
 interface ApplicationsProps {
@@ -37,6 +38,23 @@ const Applications: React.FC<ApplicationsProps> = ({ status = 'pending' }) => {
             console.error('Fetch error:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDelete = async (appId: string) => {
+        if (!window.confirm('Are you sure you want to permanently delete this application? This action cannot be undone.')) return;
+
+        try {
+            const res = await api.delete(`/admin/applications/${appId}`);
+            if (res.data.success) {
+                setApps(apps.filter(app => app.id !== appId));
+                alert('Application deleted successfully');
+            } else {
+                alert(res.data.message || 'Failed to delete application');
+            }
+        } catch (error: any) {
+            console.error('Delete error:', error);
+            alert(error.response?.data?.message || 'Error occurred while deleting');
         }
     };
 
@@ -122,12 +140,25 @@ const Applications: React.FC<ApplicationsProps> = ({ status = 'pending' }) => {
                                 <td className="px-8 py-5">{getStatusBadge(app.status)}</td>
                                 <td className="px-8 py-5 text-xs text-gray-500">{new Date(app.created_at).toLocaleDateString()}</td>
                                 <td className="px-8 py-5 text-right">
-                                    <button
-                                        onClick={() => navigate(`/applications/${app.id}`)}
-                                        className="p-2 bg-primary/10 text-primary rounded-lg hover:bg-primary hover:text-black transition-all"
-                                    >
-                                        <Eye className="w-4 h-4" />
-                                    </button>
+                                    <div className="flex justify-end space-x-2">
+                                        <button
+                                            onClick={() => navigate(`/applications/${app.id}`)}
+                                            className="p-2 bg-primary/10 text-primary rounded-lg hover:bg-primary hover:text-black transition-all"
+                                            title="View Details"
+                                        >
+                                            <Eye className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDelete(app.id);
+                                            }}
+                                            className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
+                                            title="Delete Permanently"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}

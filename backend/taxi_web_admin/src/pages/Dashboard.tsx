@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { useNavigate, Outlet } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import {
     Users,
@@ -8,7 +8,10 @@ import {
     XCircle,
     Clock,
     Car,
-    User
+    User,
+    Trash2,
+    Eye,
+    ChevronRight
 } from 'lucide-react';
 
 import api from '../services/api';
@@ -17,6 +20,7 @@ import { hasPermission } from '../utils/rbac';
 
 export const Overview: React.FC = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -41,6 +45,23 @@ export const Overview: React.FC = () => {
             setError(err.response?.data?.message || err.message || 'Network error');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDelete = async (id: string, name: string) => {
+        if (!window.confirm(`Are you sure you want to PERMANENTLY delete the application from "${name}"?`)) return;
+
+        try {
+            const res = await api.delete(`/admin/applications/${id}`);
+            if (res.data.success) {
+                fetchStats(); // Refresh dashboard
+                alert('Application deleted successfully');
+            } else {
+                alert(res.data.message);
+            }
+        } catch (error: any) {
+            console.error('Delete error:', error);
+            alert(error.response?.data?.message || 'Error occurred while deleting');
         }
     };
 
@@ -100,44 +121,85 @@ export const Overview: React.FC = () => {
                 <StatCard label="Suspended" value={stats.suspended} icon={Users} color="secondary" />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Total Passengers */}
-                <div className="glass p-8 rounded-3xl min-h-[400px] flex flex-col justify-center items-center text-center relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-                    <div className="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center mb-6 border border-blue-500/20 shadow-xl shadow-blue-500/10">
-                        <User className="w-10 h-10 text-blue-500" />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Recent Activity */}
+                <div className="glass p-8 rounded-3xl border border-white/5">
+                    <div className="flex items-center justify-between mb-8">
+                        <h3 className="text-xl font-bold flex items-center">
+                            <Clock className="w-5 h-5 mr-3 text-primary" />
+                            Recent Applications
+                        </h3>
+                        <button 
+                            onClick={() => navigate('/applications')}
+                            className="text-xs font-bold text-primary hover:underline"
+                        >
+                            VIEW ALL
+                        </button>
                     </div>
-                    <h3 className="text-lg font-bold text-gray-400 mb-1">Total Passengers</h3>
-                    <p className="text-5xl font-black mb-4 tracking-tighter text-blue-500">{stats.totalPassengers}</p>
-                    <p className="text-gray-500 text-sm max-w-xs font-medium">Registered passengers actively using the service.</p>
+                    
+                    <div className="space-y-4">
+                        {!data.recentActivity || data.recentActivity.length === 0 ? (
+                            <p className="text-gray-500 text-sm text-center py-10">No recent applications found.</p>
+                        ) : data.recentActivity.map((activity: any) => (
+                            <div key={activity.id} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 group hover:bg-white/10 transition-all">
+                                <div className="flex items-center space-x-4">
+                                    <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10">
+                                        {activity.avatar ? (
+                                            <img src={activity.avatar} alt="" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full bg-primary/20 flex items-center justify-center text-primary font-bold">
+                                                {activity.user?.charAt(0) || '?'}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold">{activity.user}</p>
+                                        <p className="text-xs text-gray-400">{activity.details}</p>
+                                        <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-wider">{new Date(activity.time).toLocaleString()}</p>
+                                    </div>
+                                </div>
+                                <div className="flex space-x-2">
+                                    <button 
+                                        onClick={() => navigate(`/applications/${activity.id}`)}
+                                        className="p-2 bg-white/5 text-gray-400 rounded-lg hover:bg-primary hover:text-black transition-all"
+                                        title="View Detail"
+                                    >
+                                        <Eye className="w-4 h-4" />
+                                    </button>
+                                    <button 
+                                        onClick={() => handleDelete(activity.id, activity.user)}
+                                        className="p-2 bg-red-500/10 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-all"
+                                        title="Delete Permanently"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
-                {/* Total Users */}
-                <div className="glass p-8 rounded-3xl min-h-[400px] flex flex-col justify-center items-center text-center relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-                    <div className="w-20 h-20 bg-purple-500/10 rounded-full flex items-center justify-center mb-6 border border-purple-500/20 shadow-xl shadow-purple-500/10">
-                        <Users className="w-10 h-10 text-purple-500" />
+                {/* Quick Shortcuts / Info */}
+                <div className="space-y-8">
+                    <div className="glass p-8 rounded-3xl min-h-[180px] flex flex-col justify-center relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+                        <h3 className="text-lg font-bold text-gray-400 mb-2">Total Passengers</h3>
+                        <p className="text-4xl font-black text-blue-500 tracking-tighter">{stats.totalPassengers}</p>
+                        <p className="text-gray-500 text-xs mt-2">Active riders currently registered.</p>
                     </div>
-                    <h3 className="text-lg font-bold text-gray-400 mb-1">Total Users</h3>
-                    <p className="text-5xl font-black mb-4 tracking-tighter text-purple-500">{stats.totalUsers}</p>
-                    <p className="text-gray-500 text-sm max-w-xs font-medium">Combined count of drivers, passengers, and admins.</p>
-                </div>
-
-                {/* Online Drivers */}
-                <div className="glass p-8 rounded-3xl min-h-[400px] flex flex-col justify-center items-center text-center relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-green-500/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-                    <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mb-6 border border-green-500/20 shadow-xl shadow-green-500/10">
-                        <Car className="w-10 h-10 text-green-500" />
+                    
+                    <div className="glass p-8 rounded-3xl min-h-[180px] flex flex-col justify-center relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+                        <h3 className="text-lg font-bold text-gray-400 mb-2">Online Drivers</h3>
+                        <p className="text-4xl font-black text-green-500 tracking-tighter">{stats.onlineDrivers}</p>
+                        <p className="text-gray-500 text-xs mt-2">Chauffeurs active on the platform.</p>
+                        <button 
+                            onClick={() => navigate('/drivers')}
+                            className="mt-4 text-xs font-bold text-green-500 hover:underline flex items-center"
+                        >
+                            MANAGE FLEET <ChevronRight className="w-3 h-3 ml-1" />
+                        </button>
                     </div>
-                    <h3 className="text-lg font-bold text-gray-400 mb-1">Online Drivers</h3>
-                    <p className="text-5xl font-black mb-4 tracking-tighter text-green-500">{stats.onlineDrivers}</p>
-                    <p className="text-gray-500 text-sm max-w-xs font-medium">Active chauffeurs currently available or on trip.</p>
-                    <button
-                        onClick={() => window.location.href = '/drivers'}
-                        className="mt-8 px-6 py-2 bg-green-500/10 text-green-500 rounded-xl font-bold hover:bg-green-500 hover:text-black transition-all text-xs border border-green-500/20"
-                    >
-                        VIEW FLEET
-                    </button>
                 </div>
             </div>
 
@@ -149,8 +211,8 @@ export const Overview: React.FC = () => {
                             <p className="text-gray-400 text-sm">Monitor your advertising slots and partner stores</p>
                         </div>
                         <div className="flex space-x-3">
-                            <button onClick={() => window.location.href='/posters'} className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold transition-all underline">MANAGE POSTERS</button>
-                            <button onClick={() => window.location.href='/stores'} className="px-4 py-2 bg-primary text-black rounded-xl text-xs font-bold transition-all shadow-lg shadow-primary/20">VIEW ALL STORES</button>
+                            <button onClick={() => navigate('/posters')} className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold transition-all underline">MANAGE POSTERS</button>
+                            <button onClick={() => navigate('/stores')} className="px-4 py-2 bg-primary text-black rounded-xl text-xs font-bold transition-all shadow-lg shadow-primary/20">VIEW ALL STORES</button>
                         </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

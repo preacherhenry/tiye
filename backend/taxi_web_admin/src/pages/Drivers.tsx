@@ -9,7 +9,8 @@ import {
     Car,
     Phone,
     ChevronRight,
-    Users
+    Users,
+    Trash2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -55,6 +56,23 @@ const Drivers: React.FC = () => {
             }
         } catch (error) {
             console.error('Update status error:', error);
+        }
+    };
+
+    const handleDelete = async (id: string, name: string) => {
+        if (!window.confirm(`Are you sure you want to PERMANENTLY delete driver "${name}" and all associated records? This cannot be undone.`)) return;
+        
+        try {
+            const res = await api.delete(`/admin/drivers/${id}`);
+            if (res.data.success) {
+                setDrivers(drivers.filter(d => d.id !== id));
+                alert('Driver deleted successfully');
+            } else {
+                alert(res.data.message);
+            }
+        } catch (error: any) {
+            console.error('Delete error:', error);
+            alert(error.response?.data?.message || 'Error occurred while deleting');
         }
     };
 
@@ -191,6 +209,16 @@ const Drivers: React.FC = () => {
                                             {driver.status === 'suspended' ? <UserCheck className="w-4 h-4" /> : <UserX className="w-4 h-4" />}
                                         </button>
                                     )}
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDelete(driver.id, driver.name);
+                                        }}
+                                        className="p-2 bg-red-600/10 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all transform hover:scale-105"
+                                        title="Permanently Delete Driver"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
                                     <button
                                         onClick={() => navigate(`/drivers/${driver.id}`)}
                                         className="p-2 bg-white/5 text-gray-400 rounded-xl hover:bg-white/10 hover:text-text transition-all"

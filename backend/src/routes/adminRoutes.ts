@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getPendingApplications, getRejectedApplications, getAnalyticsStats, getDashboardStats, getAllDrivers, toggleDriverStatus, getDriverProfile, getTripDetails, approveApplication, rejectApplication, getApplicationDetails, verifyDocument, getAllAdmins, createAdmin, toggleAdminStatus, updateAdminRole, updateAdminProfile, changePassword, uploadAdminProfilePhoto, getLoginHistory, getPassengers, updateUserStatus, getPassengerProfile, getLiveTrips, getAdminTrips } from '../controllers/adminController';
+import { getPendingApplications, getRejectedApplications, getAnalyticsStats, getDashboardStats, getAllDrivers, toggleDriverStatus, getDriverProfile, getTripDetails, approveApplication, rejectApplication, getApplicationDetails, verifyDocument, getAllAdmins, createAdmin, toggleAdminStatus, updateAdminRole, updateAdminProfile, changePassword, uploadAdminProfilePhoto, getLoginHistory, getPassengers, updateUserStatus, getPassengerProfile, getLiveTrips, getAdminTrips, deleteApplication, deleteDriver, deletePassenger } from '../controllers/adminController';
 import { authenticateToken } from '../middleware/authMiddleware';
 import { authorize } from '../middleware/rbacMiddleware';
 import multer from 'multer';
@@ -35,6 +35,9 @@ router.get('/applications/:id', authorize('driver:manage'), getApplicationDetail
 router.post('/applications/:id/approve', authorize('driver:approve'), approveApplication);
 router.post('/applications/:id/reject', authorize('driver:approve'), rejectApplication);
 router.post('/documents/:docId/verify', authorize('driver:manage'), verifyDocument);
+router.delete('/applications/:id', authorize('driver:manage'), deleteApplication);
+router.delete('/drivers/:id', authorize('driver:manage'), deleteDriver);
+router.delete('/passengers/:id', authorize('user:manage'), deletePassenger);
 
 router.get('/passengers', authorize('admin:dashboard'), getPassengers);
 router.get('/passengers/:id/profile', authorize('admin:dashboard'), getPassengerProfile);

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 import { Store, Plus, Search, Edit2, Archive, Upload, X, Save } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const Stores = () => {
     const [stores, setStores] = useState<any[]>([]);
@@ -127,7 +128,7 @@ const Stores = () => {
                                     <img 
                                         src={store.store_logo.startsWith('http') ? store.store_logo : `${api.defaults.baseURL?.replace('/admin', '')}${store.store_logo}`} 
                                         alt={store.store_name} 
-                                        className="w-full h-full object-cover"
+                                        className="w-full h-full object-contain bg-white/5"
                                     />
                                 ) : (
                                     <Store className="w-8 h-8 text-primary opacity-20" />
@@ -153,9 +154,12 @@ const Stores = () => {
                             <div className="text-[10px] font-black uppercase text-gray-500 tracking-widest">
                                 Registered: {new Date(store.created_at).toLocaleDateString()}
                             </div>
-                            <button className="text-primary text-xs font-black uppercase tracking-widest hover:underline">
+                            <Link 
+                                to={`/inventory/${store.id}`}
+                                className="text-primary text-xs font-black uppercase tracking-widest hover:underline"
+                            >
                                 View Items
-                            </button>
+                            </Link>
                         </div>
                     </div>
                 ))}
@@ -176,7 +180,7 @@ const Stores = () => {
                             <div className="flex flex-col items-center mb-4">
                                 <div className="w-24 h-24 bg-white/5 rounded-3xl border border-white/10 relative group overflow-hidden flex items-center justify-center">
                                     {formData.previewUrl ? (
-                                        <img src={formData.previewUrl} className="w-full h-full object-cover" />
+                                        <img src={formData.previewUrl} className="w-full h-full object-contain bg-white/5" />
                                     ) : (
                                         <Store className="w-10 h-10 text-gray-500" />
                                     )}

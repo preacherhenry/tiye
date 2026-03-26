@@ -69,6 +69,22 @@ const DriverProfile: React.FC = () => {
         }
     };
 
+    const handleDelete = async () => {
+        if (!window.confirm(`Are you sure you want to PERMANENTLY delete driver "${data.driver.name}" and all associated records? This cannot be undone.`)) return;
+        
+        try {
+            const res = await api.delete(`/admin/drivers/${id}`);
+            if (res.data.success) {
+                navigate('/drivers');
+            } else {
+                alert(res.data.message);
+            }
+        } catch (error: any) {
+            console.error('Delete error:', error);
+            alert(error.response?.data?.message || 'Error occurred while deleting');
+        }
+    };
+
     const getStatusIndicator = (status: string) => {
         switch (status) {
             case 'busy':
@@ -137,11 +153,18 @@ const DriverProfile: React.FC = () => {
                         onClick={toggleStatus}
                         className={`flex items-center space-x-2 px-6 py-3 rounded-xl font-bold transition-all active:scale-95 shadow-lg ${driver.status === 'suspended'
                             ? 'bg-green-500 text-black hover:bg-green-400 shadow-green-500/20'
-                            : 'bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white shadow-red-500/10'
+                            : 'bg-white/5 text-gray-400 border border-white/5 hover:bg-white/10 hover:text-white'
                             }`}
                     >
                         {driver.status === 'suspended' ? <UserCheck className="w-5 h-5" /> : <UserX className="w-5 h-5" />}
                         <span>{driver.status === 'suspended' ? 'Reactivate Profile' : 'Suspend Account'}</span>
+                    </button>
+                    <button
+                        onClick={handleDelete}
+                        className="flex items-center space-x-2 px-4 py-3 bg-red-600/10 text-red-600 border border-red-600/20 rounded-xl font-bold hover:bg-red-600 hover:text-white transition-all active:scale-95 shadow-lg shadow-red-500/10"
+                        title="Permanently Delete Driver"
+                    >
+                        <Trash2 className="w-5 h-5" />
                     </button>
                 </div>
             </div>

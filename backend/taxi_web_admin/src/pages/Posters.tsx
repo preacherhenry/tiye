@@ -115,7 +115,7 @@ const Posters = () => {
                                 {(isEditing ? formData.previewUrl : poster?.image_url) ? (
                                     <img 
                                         src={isEditing ? formData.previewUrl : (poster.image_url.startsWith('http') ? poster.image_url : `${api.defaults.baseURL?.replace('/admin', '')}${poster.image_url}`)} 
-                                        className="w-full h-full object-cover" 
+                                        className="w-full h-full object-contain bg-white/5" 
                                         alt={slot}
                                     />
                                 ) : (

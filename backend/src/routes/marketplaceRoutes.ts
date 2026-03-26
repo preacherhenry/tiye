@@ -39,4 +39,12 @@ router.post('/items', upload.single('image'), MarketplaceController.createItem);
 router.put('/items/:id', upload.single('image'), MarketplaceController.updateItem);
 router.delete('/items/:id', MarketplaceController.deleteItem);
 
+// Order Management (Passenger)
+router.post('/orders', MarketplaceController.createOrder);
+router.get('/orders', MarketplaceController.getUserOrders);
+router.get('/orders/:id', MarketplaceController.getOrderDetails);
+
+// Order Management (Admin/Store)
+router.patch('/orders/:id/status', MarketplaceController.updateOrderStatus);
+
 export default router;

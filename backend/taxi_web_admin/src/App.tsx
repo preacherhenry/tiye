@@ -87,6 +87,7 @@ const App: React.FC = () => {
             <Route path="posters" element={<PermissionRoute permission="marketplace:manage"><Posters /></PermissionRoute>} />
             <Route path="stores" element={<PermissionRoute permission="marketplace:manage"><Stores /></PermissionRoute>} />
             <Route path="inventory" element={<PermissionRoute permission="marketplace:manage"><Inventory /></PermissionRoute>} />
+            <Route path="inventory/:storeId" element={<PermissionRoute permission="marketplace:manage"><Inventory /></PermissionRoute>} />
             <Route path="settings" element={<Settings />} />
           </Route>
           <Route

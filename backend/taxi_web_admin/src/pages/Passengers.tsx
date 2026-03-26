@@ -8,7 +8,8 @@ import {
     Phone,
     Calendar,
     Ban,
-    CheckCircle2
+    CheckCircle2,
+    Trash2
 } from 'lucide-react';
 
 interface Passenger {
@@ -60,6 +61,23 @@ const Passengers: React.FC = () => {
         } catch (error) {
             console.error('Error updating status:', error);
             alert('Failed to update status');
+        }
+    };
+
+    const handleDelete = async (id: number, name: string) => {
+        if (!window.confirm(`Are you sure you want to PERMANENTLY delete passenger "${name}" and all associated wallet records? This cannot be undone.`)) return;
+
+        try {
+            const res = await api.delete(`/admin/passengers/${id}`);
+            if (res.data.success) {
+                setPassengers(passengers.filter(p => p.id !== id));
+                alert('Passenger deleted successfully');
+            } else {
+                alert(res.data.message);
+            }
+        } catch (error: any) {
+            console.error('Delete error:', error);
+            alert(error.response?.data?.message || 'Error occurred while deleting');
         }
     };
 
@@ -168,18 +186,25 @@ const Passengers: React.FC = () => {
                                     </span>
                                 </td>
                                 <td className="p-6">
-                                    {(passenger.status === 'active' || (user?.role === 'super_admin')) && (
-                                        <button
-                                            onClick={() => handleStatusToggle(passenger.id, passenger.status)}
-                                            className={`p-2 rounded-lg transition-all ${passenger.status === 'active'
-                                                    ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
-                                                    : 'bg-green-500/10 text-green-500 hover:bg-green-500/20'
-                                                }`}
-                                            title={passenger.status === 'active' ? 'Suspend' : 'Activate'}
-                                        >
-                                            {passenger.status === 'active' ? <Ban className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
-                                        </button>
-                                    )}
+                                        <div className="flex items-center space-x-2">
+                                            <button
+                                                onClick={() => handleStatusToggle(passenger.id, passenger.status)}
+                                                className={`p-2 rounded-lg transition-all ${passenger.status === 'active'
+                                                        ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
+                                                        : 'bg-green-500/10 text-green-500 hover:bg-green-500/20'
+                                                    }`}
+                                                title={passenger.status === 'active' ? 'Suspend' : 'Activate'}
+                                            >
+                                                {passenger.status === 'active' ? <Ban className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(passenger.id, passenger.name)}
+                                                className="p-2 bg-red-600/10 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all"
+                                                title="Delete Permanently"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                 </td>
                             </tr>
                         ))}

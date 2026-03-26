@@ -1144,3 +1144,132 @@ export const getAdminTrips = async (req: Request, res: Response) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+export const deleteApplication = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const adminId = (req as any).user?.id || null;
+    try {
+        const appRef = db.collection('driver_applications').doc(id);
+        const appDoc = await appRef.get();
+        if (!appDoc.exists) return res.json({ success: false, message: 'Application not found' });
+
+        const docsSnapshot = await db.collection('driver_documents').where('application_id', '==', id).get();
+        
+        await db.runTransaction(async (transaction) => {
+            // Delete documents
+            docsSnapshot.docs.forEach(doc => transaction.delete(doc.ref));
+            
+            // Delete application
+            transaction.delete(appRef);
+
+            // Audit log
+            transaction.set(db.collection('audit_logs').doc(), {
+                user_id: adminId,
+                action: 'delete_driver_application',
+                target_type: 'driver_application',
+                target_id: id,
+                timestamp: new Date().toISOString()
+            });
+        });
+
+        res.json({ success: true, message: 'Application and associated documents deleted permanently' });
+    } catch (error: any) {
+        res.json({ success: false, message: error.message });
+    }
+};
+
+export const deleteDriver = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const adminId = (req as any).user?.id || null;
+    try {
+        const userRef = db.collection('users').doc(id);
+        const userDoc = await userRef.get();
+        if (!userDoc.exists || userDoc.data()?.role !== 'driver') {
+            return res.json({ success: false, message: 'Driver not found' });
+        }
+
+        // Check for active trips
+        const activeTrips = await db.collection('rides')
+            .where('driver_id', '==', id)
+            .where('status', 'in', ['accepted', 'arrived', 'picked_up'])
+            .get();
+        
+        if (!activeTrips.empty) {
+            return res.json({ success: false, message: 'Cannot delete driver: Active trip in progress.' });
+        }
+
+        await db.runTransaction(async (transaction) => {
+            // 1. Delete from users
+            transaction.delete(userRef);
+            
+            // 2. Delete from drivers
+            transaction.delete(db.collection('drivers').doc(id));
+            
+            // 3. Delete associated applications
+            const appsSnapshot = await db.collection('driver_applications').where('user_id', '==', id).get();
+            appsSnapshot.docs.forEach(doc => transaction.delete(doc.ref));
+            
+            // 4. Delete associated documents
+            const docsSnapshot = await db.collection('driver_documents').where('user_id', '==', id).get();
+            docsSnapshot.docs.forEach(doc => transaction.delete(doc.ref));
+
+            // 5. Delete wallet
+            transaction.delete(db.collection('wallets').doc(id));
+
+            // 6. Audit log
+            transaction.set(db.collection('audit_logs').doc(), {
+                user_id: adminId,
+                action: 'delete_driver',
+                target_type: 'user',
+                target_id: id,
+                timestamp: new Date().toISOString()
+            });
+        });
+
+        res.json({ success: true, message: 'Driver and all associated records deleted permanently' });
+    } catch (error: any) {
+        res.json({ success: false, message: error.message });
+    }
+};
+
+export const deletePassenger = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const adminId = (req as any).user?.id || null;
+    try {
+        const userRef = db.collection('users').doc(id);
+        const userDoc = await userRef.get();
+        if (!userDoc.exists || userDoc.data()?.role !== 'passenger') {
+            return res.json({ success: false, message: 'Passenger not found' });
+        }
+
+        // Check for active trips
+        const activeTrips = await db.collection('rides')
+            .where('passenger_id', '==', id)
+            .where('status', 'in', ['accepted', 'arrived', 'picked_up'])
+            .get();
+        
+        if (!activeTrips.empty) {
+            return res.json({ success: false, message: 'Cannot delete passenger: Active trip in progress.' });
+        }
+
+        await db.runTransaction(async (transaction) => {
+            // 1. Delete from users
+            transaction.delete(userRef);
+            
+            // 2. Delete wallet
+            transaction.delete(db.collection('wallets').doc(id));
+
+            // 3. Audit log
+            transaction.set(db.collection('audit_logs').doc(), {
+                user_id: adminId,
+                action: 'delete_passenger',
+                target_type: 'user',
+                target_id: id,
+                timestamp: new Date().toISOString()
+            });
+        });
+
+        res.json({ success: true, message: 'Passenger deleted permanently' });
+    } catch (error: any) {
+        res.json({ success: false, message: error.message });
+    }
+};

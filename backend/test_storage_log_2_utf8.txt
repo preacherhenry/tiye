@@ -1,0 +1,29 @@
+﻿Γ£à Firebase Admin initialized successfully
+≡ƒÜÇ Starting Firebase Storage test upload...
+≡ƒÜÇ Attempting Firebase upload to bucket: tiye-taxi-app.appspot.com, destination: test_uploads/test-upload-1774452820292.jpg
+node.exe : Γ¥î Firebase upload FAILED for test-upload-1774452820292.jpg: {
+At C:\Program Files\nodejs\npx.ps1:32 char:3
++   & $nodeexe $npmprefixclijs $args
++   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Γ¥î Firebase up...52820292.jpg: {:St 
+   ring) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  "error": {
+    "code": 404,
+    "message": "The specified bucket does not exist.",
+    "errors": [
+      {
+        "message": "The specified bucket does not exist.",
+        "domain": "global",
+        "reason": "notFound"
+      }
+    ]
+  }
+}
+
+ΓÜá∩╕Å Using local fallback URL: 
+https://localhost:5000/uploads/test-upload-1774452820292.jpg
+   Note: This file will be lost if the Render server restarts or redeploys.
+≡ƒÅü Test completed. URL: https://localhost:5000/uploads/test-upload-1774452820292.jpg
+ΓÜá∩╕Å FALLBACK: Uploaded to local storage (Render fallback).
