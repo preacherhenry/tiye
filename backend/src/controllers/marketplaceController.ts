@@ -6,11 +6,26 @@ import { uploadFile } from '../utils/storage';
  * POSTER MANAGEMENT
  */
 
-// Get all posters (P1-P2, A1-A6)
+// Get all posters (P1-P2, A1-A6) with store details
 export const getPosters = async (req: Request, res: Response) => {
     try {
         const postersSnapshot = await db.collection('posters').get();
-        const posters = postersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const posters = await Promise.all(postersSnapshot.docs.map(async doc => {
+            const posterData = doc.data();
+            const posterWithId = { id: doc.id, ...posterData };
+
+            if (posterData.store_id) {
+                const storeDoc = await db.collection('stores').doc(posterData.store_id).get();
+                if (storeDoc.exists) {
+                    return {
+                        ...posterWithId,
+                        store: { id: storeDoc.id, ...storeDoc.data() }
+                    };
+                }
+            }
+            return posterWithId;
+        }));
+        
         res.json({ success: true, posters });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
@@ -25,7 +40,7 @@ export const updatePoster = async (req: Request, res: Response) => {
         let image_url = req.body.image_url;
 
         if (req.file) {
-            image_url = await uploadFile(req.file as Express.Multer.File, 'posters', req);
+            image_url = await uploadFile(req.file as Express.Multer.File, 'posters');
         }
 
         const posterData: any = {
@@ -68,7 +83,7 @@ export const createStore = async (req: Request, res: Response) => {
         let store_logo = '';
 
         if (req.file) {
-            store_logo = await uploadFile(req.file as Express.Multer.File, 'stores', req);
+            store_logo = await uploadFile(req.file as Express.Multer.File, 'stores');
         }
 
         const newStore = {
@@ -92,7 +107,7 @@ export const updateStore = async (req: Request, res: Response) => {
         let store_logo = req.body.store_logo;
 
         if (req.file) {
-            store_logo = await uploadFile(req.file as Express.Multer.File, 'stores', req);
+            store_logo = await uploadFile(req.file as Express.Multer.File, 'stores');
         }
 
         const updateData: any = { updated_at: new Date().toISOString() };
@@ -134,7 +149,7 @@ export const createItem = async (req: Request, res: Response) => {
         let image_url = '';
 
         if (req.file) {
-            image_url = await uploadFile(req.file as Express.Multer.File, 'items', req);
+            image_url = await uploadFile(req.file as Express.Multer.File, 'items');
         }
 
         const newItem = {
@@ -162,7 +177,7 @@ export const updateItem = async (req: Request, res: Response) => {
         let image_url = req.body.image_url;
 
         if (req.file) {
-            image_url = await uploadFile(req.file as Express.Multer.File, 'items', req);
+            image_url = await uploadFile(req.file as Express.Multer.File, 'items');
         }
 
         const updateData: any = { updated_at: new Date().toISOString() };
