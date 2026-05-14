@@ -26,6 +26,7 @@ export default function LiveRideMonitor({ driverId, activeTrip }: LiveRideMonito
     const [driverLocation, setDriverLocation] = useState(defaultCenter);
     const [gpsTrail, setGpsTrail] = useState<{lat: number, lng: number}[]>([]);
     const tripIdRef = useRef<string | null>(null);
+    const [mapError, setMapError] = useState<string | null>(null);
     const [telemetry, setTelemetry] = useState({
         speed: 0,
         battery: null as number | null,
@@ -83,6 +84,10 @@ export default function LiveRideMonitor({ driverId, activeTrip }: LiveRideMonito
                 (result, status) => {
                     if (status === window.google.maps.DirectionsStatus.OK) {
                         setDirections(result);
+                        setMapError(null);
+                    } else {
+                        console.error('Directions Error:', status);
+                        setMapError(`Route Error: ${status}`);
                     }
                 }
             );
@@ -171,6 +176,13 @@ export default function LiveRideMonitor({ driverId, activeTrip }: LiveRideMonito
                     >
                         {isExpanded ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
                     </button>
+                    
+                    {mapError && (
+                        <div className="bg-red-500/90 text-white p-2 rounded-xl text-[10px] font-bold animate-pulse flex items-center">
+                            <AlertTriangle className="w-3 h-3 mr-2" />
+                            {mapError}
+                        </div>
+                    )}
                     
                     <div className="bg-black/60 backdrop-blur-md border border-white/10 rounded-xl p-3 flex flex-col space-y-3">
                         <div className="flex items-center text-green-500" title="GPS Signal Strength">
