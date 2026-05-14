@@ -1,21 +1,12 @@
 import { Router } from 'express';
 import { register, login, logout, updateLocation, uploadProfilePhoto, applyDriver, updateProfile, getUserProfile } from '../controllers/authController';
-import { authenticateToken } from '../middleware/authMiddleware'; import multer from 'multer';
-import path from 'path';
+import { authenticateToken } from '../middleware/authMiddleware';
+import multer from 'multer';
 
 const router = Router();
 
-// Configure Multer for local storage with fallback
-const storage_config = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/');
-    },
-    filename: (req, file, cb) => {
-        const prefix = file.fieldname === 'profile_photo' ? 'user' : 'doc';
-        cb(null, `${prefix}-${Date.now()}${path.extname(file.originalname)}`);
-    }
-});
-const upload = multer({ storage: storage_config });
+// Use memory storage — files go directly to Firebase Storage (permanent)
+const upload = multer({ storage: multer.memoryStorage() });
 
 router.post('/register', register);
 router.post('/apply-driver', upload.fields([

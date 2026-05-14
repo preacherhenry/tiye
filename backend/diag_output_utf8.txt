@@ -1,0 +1,32 @@
+﻿Γ£à Firebase Admin initialized successfully
+=== DIAGNOSTIC REPORT ===
+
+--- Searching for Preacher in users collection ---
+Γ£à Found 1 user(s):
+   ID: 41ncSJwQ29lW7nYwLFXQ | Name: Preacher  | Role: driver | Status: approved
+
+--- Checking drivers collection for Preacher ---
+
+Γ£à Driver Document for Preacher  (41ncSJwQ29lW7nYwLFXQ):
+   vehicle_class (raw):        "Comfort Plus"
+   vehicle_class (normalized): "Comfort+"
+   online_status:              "online"
+   wallet_balance:             K200
+   current_lat/lng:            -16.0301295, 28.8462535
+
+--- Pending Rides with vehicle_class containing "Comfort+" ---
+
+   Ride ID: ZorBu8uUfdL6fCTLeaTz
+   vehicle_class (raw):        "Comfort+"
+   vehicle_class (normalized): "Comfort+"
+   status:                     "pending"
+   created_at:                 2026-04-25T07:52:39.878Z
+
+--- Settings: min_online_balance ---
+   min_online_balance: K5
+
+--- Checking ride_rejections for Preacher ---
+   No rejections recorded for driver 41ncSJwQ29lW7nYwLFXQ
+
+=== END OF DIAGNOSTIC REPORT ===
+

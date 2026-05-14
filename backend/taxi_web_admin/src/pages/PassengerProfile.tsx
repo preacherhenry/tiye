@@ -7,15 +7,20 @@ import {
     ArrowLeft,
     Clock,
     Car,
-    Trash2
+    Trash2,
+    Play,
+    ChevronRight
 } from 'lucide-react';
 import api from '../services/api';
+import LiveRideMonitor from '../components/tracking/LiveRideMonitor';
+import RoutePlaybackModal from '../components/tracking/RoutePlaybackModal';
 
 const PassengerProfile: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [profile, setProfile] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [playbackTripId, setPlaybackTripId] = useState<string | null>(null);
 
     useEffect(() => {
         fetchProfile();
@@ -53,7 +58,7 @@ const PassengerProfile: React.FC = () => {
     if (loading) return <div className="p-10 text-center text-gray-400">Loading profile...</div>;
     if (!profile) return <div className="p-10 text-center text-red-500">Passenger not found</div>;
 
-    const { user, trips, stats } = profile;
+    const { user, trips, stats, activeTrip } = profile;
 
     return (
         <div className="space-y-8 pb-10">
@@ -113,6 +118,11 @@ const PassengerProfile: React.FC = () => {
                     <p className="text-gray-400 text-xs font-black uppercase tracking-widest mb-2">Total Spent</p>
                     <p className="text-3xl font-black text-yellow-500">${stats.total_spent.toFixed(2)}</p>
                 </div>
+            </div>
+
+            {/* Live Ride Monitor */}
+            <div className="mb-8 mt-8">
+                <LiveRideMonitor driverId={activeTrip?.driver_id || ''} activeTrip={activeTrip} />
             </div>
 
             {/* Trip History */}
@@ -182,18 +192,35 @@ const PassengerProfile: React.FC = () => {
                                     </span>
                                 </td>
                                 <td className="p-6">
-                                    <button
-                                        onClick={() => navigate(`/trips/${trip.id}`)}
-                                        className="text-xs font-bold text-gray-400 hover:text-white border border-white/10 hover:border-white/30 px-3 py-1 rounded-lg transition-all"
-                                    >
-                                        View
-                                    </button>
+                                    <div className="flex items-center space-x-2">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setPlaybackTripId(trip.id); }}
+                                            className="p-2 bg-primary/10 text-primary rounded-lg hover:bg-primary hover:text-black transition-all border border-primary/20"
+                                            title="View Route Playback"
+                                        >
+                                            <Play className="w-4 h-4 fill-current" />
+                                        </button>
+                                        <button
+                                            onClick={() => navigate(`/trips/${trip.id}`)}
+                                            className="p-2 bg-white/5 text-gray-400 hover:text-primary hover:bg-primary/20 rounded-lg transition-all border border-transparent hover:border-primary/20"
+                                            title="View Details"
+                                        >
+                                            <ChevronRight className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </div>
+
+            {/* Route Playback Modal */}
+            <RoutePlaybackModal 
+                isOpen={!!playbackTripId} 
+                onClose={() => setPlaybackTripId(null)} 
+                tripId={playbackTripId || ''} 
+            />
         </div>
     );
 };

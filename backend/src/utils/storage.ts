@@ -1,50 +1,40 @@
 import { storage } from '../config/firebase';
-import fs from 'fs';
-import { Request } from 'express';
 
 /**
- * Uploads a file to Firebase Storage with a local fallback.
+ * Uploads a file to Firebase Storage permanently.
+ * Supports both disk-based (file.path) and memory-based (file.buffer) multer storage.
  * @param file The multer file object
  * @param folder The folder in Firebase Storage (e.g., 'deposits', 'profiles')
- * @param req The Express request object (for fallback URL generation)
- * @returns The public URL of the uploaded file
+ * @returns The permanent public URL of the uploaded file
  */
-export const uploadFile = async (file: Express.Multer.File, folder: string, req: Request): Promise<string> => {
+export const uploadFile = async (file: Express.Multer.File, folder: string): Promise<string> => {
     const bucket = storage.bucket();
-    const destination = `${folder}/${file.filename}`;
+    const timestamp = Date.now();
+    const safeFilename = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const destination = `${folder}/${timestamp}-${safeFilename}`;
     const fileRef = bucket.file(destination);
-    
-    try {
-        console.log(`🚀 Attempting Firebase upload to bucket: ${bucket.name}, destination: ${destination}`);
-        
-        await fileRef.save(fs.readFileSync(file.path), {
-            metadata: { contentType: file.mimetype },
-            public: true
-        });
 
-        const url = `https://storage.googleapis.com/${bucket.name}/${destination}`;
-        console.log(`✅ Firebase upload successful: ${url}`);
-        return url;
-    } catch (error: any) {
-        console.error(`❌ Firebase upload FAILED for ${file.filename}:`, error.message);
-        
-        // Detailed error context
-        if (error.code === 404) {
-            console.error('   Reason: Bucket not found. Check if Firebase Storage is enabled and bucket name is correct.');
-        } else if (error.code === 403) {
-            console.error('   Reason: Permission denied. Check Firebase Storage rules or Service Account permissions.');
-        }
+    let fileBuffer: Buffer;
 
-        // Fallback to local URL (Served by Render, but ephemeral)
-        // Force HTTPS for production reliability
-        const protocol = req.secure || req.get('x-forwarded-proto') === 'https' ? 'https' : 'https'; 
-        const host = req.get('host') === 'localhost:5000' ? 'localhost:5000' : 'tiye-backend.onrender.com';
-        
-        const fallbackUrl = `${protocol}://${host}/uploads/${file.filename}`;
-        
-        console.warn(`⚠️ Using local fallback URL: ${fallbackUrl}`);
-        console.warn('   Note: This file will be lost if the Render server restarts or redeploys.');
-        
-        return fallbackUrl;
+    if (file.buffer) {
+        // memoryStorage: buffer is in RAM
+        fileBuffer = file.buffer;
+    } else if (file.path) {
+        // diskStorage: read from temp disk path
+        const fs = await import('fs');
+        fileBuffer = fs.readFileSync(file.path);
+        // Clean up the temp file
+        try { fs.unlinkSync(file.path); } catch {}
+    } else {
+        throw new Error('File has neither buffer nor path — check multer configuration.');
     }
+
+    await fileRef.save(fileBuffer, {
+        metadata: { contentType: file.mimetype },
+        public: true,
+    });
+
+    const url = `https://storage.googleapis.com/${bucket.name}/${destination}`;
+    console.log(`✅ Firebase upload successful: ${url}`);
+    return url;
 };

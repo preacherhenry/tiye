@@ -3,6 +3,21 @@ import { db } from '../config/firebase';
 import { isLocationInServiceArea } from '../config/serviceArea';
 import { getDistanceBetween } from '../utils/geo';
 
+/**
+ * Normalizes any vehicle class string (historical or current) to a canonical value.
+ * Handles legacy migration values: 'Taxi' -> 'Regular', 'Comfort Plus' -> 'Comfort+'
+ */
+const normalizeVehicleClass = (cls: string | undefined | null): string => {
+    if (!cls) return 'Regular';
+    const map: Record<string, string> = {
+        'taxi': 'Regular',
+        'regular': 'Regular',
+        'comfort+': 'Comfort+',
+        'comfort plus': 'Comfort+',
+    };
+    return map[cls.toLowerCase().trim()] ?? cls;
+};
+
 const fixPhotoUrl = (url: string | null, req: Request) => {
     if (!url) return null;
     const host = req.get('host') || 'localhost:5000';
@@ -149,7 +164,7 @@ export const requestRide = async (req: Request, res: Response) => {
             dest_lat: dropoff_lat || 0,
             dest_lng: dropoff_lng || 0,
             is_manual_destination: isManual,
-            vehicle_class: vehicle_class || 'Regular',
+            vehicle_class: normalizeVehicleClass(vehicle_class || 'Regular'),
             status: 'pending',
             created_at: new Date().toISOString()
         };
@@ -219,14 +234,14 @@ export const getPendingRides = async (req: Request, res: Response) => {
             return;
         }
 
-        const driverClass = driverDoc.data()?.vehicle_class || 'Regular';
+        const driverClass = normalizeVehicleClass(driverDoc.data()?.vehicle_class);
         const driverLat = driverDoc.data()?.current_lat;
         const driverLng = driverDoc.data()?.current_lng;
 
         // 5. Filter by class, rejection, and calculate distance
         const availableRides = allRides
             .filter(ride => {
-                const isMatch = (ride.vehicle_class === driverClass);
+                const isMatch = (normalizeVehicleClass(ride.vehicle_class) === driverClass);
                 const isNotRejected = !rejectedRideIds.has(ride.id);
                 return isMatch && isNotRejected;
             })

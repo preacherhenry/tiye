@@ -24,7 +24,7 @@ export const submitSubscription = async (req: Request, res: Response) => {
     }
 
     try {
-        const screenshot_url = await uploadFile(file as Express.Multer.File, 'subscriptions', req);
+        const screenshot_url = await uploadFile(file as Express.Multer.File, 'subscriptions');
 
         const batch = db.batch();
         const subRef = db.collection('driver_subscriptions').doc();

@@ -16,20 +16,12 @@ import {
 
 import { authenticateToken } from '../middleware/authMiddleware';
 import multer from 'multer';
-import path from 'path';
+
 
 const router = Router();
 
-// Configure Multer for screenshots (Disk Storage)
-const storage_config = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/');
-    },
-    filename: (req, file, cb) => {
-        cb(null, `sub-${Date.now()}${path.extname(file.originalname)}`);
-    }
-});
-const upload = multer({ storage: storage_config });
+// Use memory storage — files go directly to Firebase Storage (permanent)
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Driver Routes
 router.get('/plans', authenticateToken, getPlans);

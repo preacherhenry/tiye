@@ -4,7 +4,6 @@ import jwt from 'jsonwebtoken';
 import { db } from '../config/firebase';
 import { uploadFile } from '../utils/storage';
 import dotenv from 'dotenv';
-import fs from 'fs';
 
 dotenv.config();
 
@@ -209,11 +208,13 @@ export const updateLocation = async (req: Request, res: Response) => {
         const updateData: any = {
             current_lat: lat,
             current_lng: lng,
-            last_location_update: new Date().toISOString()
+            last_location_update: new Date().toISOString(),
+            last_seen_at: new Date().toISOString()
         };
-        if (heading !== undefined) {
-            updateData.heading = heading;
-        }
+        if (heading !== undefined) updateData.heading = heading;
+        if (req.body.speed !== undefined) updateData.speed = req.body.speed;
+        if (req.body.battery_level !== undefined) updateData.battery_level = req.body.battery_level;
+        if (req.body.signal_strength !== undefined) updateData.signal_strength = req.body.signal_strength;
 
         await db.collection('users').doc(userId).update(updateData);
 
@@ -221,6 +222,32 @@ export const updateLocation = async (req: Request, res: Response) => {
         const userDoc = await db.collection('users').doc(userId).get();
         if (userDoc.exists && userDoc.data()?.role === 'driver') {
             await db.collection('drivers').doc(userId).update(updateData);
+
+            // Check for active trip to store GPS trail
+            try {
+                const activeTripQuery = await db.collection('rides')
+                    .where('driver_id', '==', userId)
+                    .where('status', 'in', ['accepted', 'arrived', 'picked_up'])
+                    .limit(1)
+                    .get();
+                    
+                if (!activeTripQuery.empty) {
+                    const tripId = activeTripQuery.docs[0].id;
+                    await db.collection('trip_gps_logs').add({
+                        trip_id: tripId,
+                        driver_id: userId,
+                        lat,
+                        lng,
+                        heading: heading || 0,
+                        speed: req.body.speed || 0,
+                        battery_level: req.body.battery_level || null,
+                        signal_strength: req.body.signal_strength || null,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            } catch (e) {
+                console.warn('Could not log GPS trail:', e);
+            }
         }
 
         res.json({ success: true, message: 'Location updated' });
@@ -295,12 +322,8 @@ export const applyDriver = async (req: Request, res: Response) => {
         const newUserRef = db.collection('users').doc();
         const userId = newUserRef.id;
 
-        const uploadToFirebase = async (file: Express.Multer.File, folder: string, req: Request) => {
-            return await uploadFile(file, folder, req);
-        };
-
         const profilePhoto = files?.['profile_photo']
-            ? await uploadToFirebase(files['profile_photo'][0], 'profiles', req)
+            ? await uploadFile(files['profile_photo'][0], 'profiles')
             : '';
 
         const userData: any = {
@@ -320,16 +343,16 @@ export const applyDriver = async (req: Request, res: Response) => {
 
         await newUserRef.set(userData);
 
-        const licenseFront = files?.['license_front'] ? await uploadToFirebase(files['license_front'][0], 'documents', req) : '';
-        const licenseBack = files?.['license_back'] ? await uploadToFirebase(files['license_back'][0], 'documents', req) : '';
-        const nrcFront = files?.['nrc_front'] ? await uploadToFirebase(files['nrc_front'][0], 'documents', req) : '';
-        const nrcBack = files?.['nrc_back'] ? await uploadToFirebase(files['nrc_back'][0], 'documents', req) : '';
+        const licenseFront = files?.['license_front'] ? await uploadFile(files['license_front'][0], 'documents') : '';
+        const licenseBack = files?.['license_back'] ? await uploadFile(files['license_back'][0], 'documents') : '';
+        const nrcFront = files?.['nrc_front'] ? await uploadFile(files['nrc_front'][0], 'documents') : '';
+        const nrcBack = files?.['nrc_back'] ? await uploadFile(files['nrc_back'][0], 'documents') : '';
 
-        const carFront = files?.['car_front'] ? await uploadToFirebase(files['car_front'][0], 'vehicles', req) : '';
-        const carBack = files?.['car_back'] ? await uploadToFirebase(files['car_back'][0], 'vehicles', req) : '';
-        const carSideLeft = files?.['car_side_left'] ? await uploadToFirebase(files['car_side_left'][0], 'vehicles', req) : '';
-        const carSideRight = files?.['car_side_right'] ? await uploadToFirebase(files['car_side_right'][0], 'vehicles', req) : '';
-        const carInterior = files?.['car_interior'] ? await uploadToFirebase(files['car_interior'][0], 'vehicles', req) : '';
+        const carFront = files?.['car_front'] ? await uploadFile(files['car_front'][0], 'vehicles') : '';
+        const carBack = files?.['car_back'] ? await uploadFile(files['car_back'][0], 'vehicles') : '';
+        const carSideLeft = files?.['car_side_left'] ? await uploadFile(files['car_side_left'][0], 'vehicles') : '';
+        const carSideRight = files?.['car_side_right'] ? await uploadFile(files['car_side_right'][0], 'vehicles') : '';
+        const carInterior = files?.['car_interior'] ? await uploadFile(files['car_interior'][0], 'vehicles') : '';
 
         // 5. Create Application
         const appRef = db.collection('driver_applications').doc();
@@ -415,7 +438,7 @@ export const uploadProfilePhoto = async (req: Request, res: Response) => {
     }
 
     try {
-        const photoUrl = await uploadFile(req.file as Express.Multer.File, 'profiles', req);
+        const photoUrl = await uploadFile(req.file as Express.Multer.File, 'profiles');
 
         await db.collection('users').doc(userId).update({
             profile_photo: photoUrl

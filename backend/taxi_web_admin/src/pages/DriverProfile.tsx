@@ -18,16 +18,19 @@ import {
     TrendingUp,
     CreditCard,
     Pause,
-    Play,
     Trash2,
-    Settings
+    Settings,
+    Play
 } from 'lucide-react';
+import LiveRideMonitor from '../components/tracking/LiveRideMonitor';
+import RoutePlaybackModal from '../components/tracking/RoutePlaybackModal';
 
 const DriverProfile: React.FC = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [playbackTripId, setPlaybackTripId] = useState<string | null>(null);
 
     useEffect(() => {
         fetchProfile();
@@ -233,42 +236,6 @@ const DriverProfile: React.FC = () => {
                 </div>
 
                 <div className="lg:col-span-2 space-y-8">
-                    {/* Active Trip Highligth */}
-                    {activeTrip && (
-                        <div className="glass p-8 rounded-[2rem] border-2 border-primary/30 bg-primary/5 relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
-                                <Activity className="w-32 h-32 text-primary" />
-                            </div>
-                            <div className="relative z-10">
-                                <div className="flex justify-between items-start mb-6">
-                                    <div>
-                                        <h3 className="text-primary text-[10px] font-black uppercase tracking-[0.3em] mb-1">Live Active Ride</h3>
-                                        <p className="text-xs text-gray-500">Currently serving a platform request.</p>
-                                    </div>
-                                    <div className="px-3 py-1 bg-primary text-black text-[10px] font-black rounded-lg animate-pulse">
-                                        {activeTrip.status.toUpperCase()}
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div>
-                                        <p className="text-gray-500 text-[10px] uppercase font-black mb-1">Passenger</p>
-                                        <p className="text-xl font-bold">{activeTrip.passenger_name}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-gray-500 text-[10px] uppercase font-black mb-1">Current Route</p>
-                                        <p className="text-sm font-medium line-clamp-1">{activeTrip.pickup_location} <ChevronRight className="w-3 h-3 inline mx-1 opacity-30" /> {activeTrip.destination}</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => navigate(`/trips/${activeTrip.id}`)}
-                                    className="mt-8 flex items-center text-primary text-[10px] font-black uppercase tracking-widest hover:opacity-70 transition-opacity"
-                                >
-                                    TRACK TRIP LOGISTICS <ChevronRight className="w-3 h-3 ml-2" />
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
                     {/* Stats Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="glass p-6 rounded-[2rem] border border-white/5">
@@ -293,6 +260,9 @@ const DriverProfile: React.FC = () => {
                             </div>
                         </div>
                     </div>
+
+                    {/* Live Tracking Map Component */}
+                    <LiveRideMonitor driverId={id as string} activeTrip={activeTrip} />
                 </div>
 
                 {/* Vehicle Info */}
@@ -305,13 +275,12 @@ const DriverProfile: React.FC = () => {
                         <div className="flex items-center space-x-2">
                             <span className="text-[10px] font-black text-gray-500 uppercase">Class:</span>
                             <select 
-                                value={driver.vehicle_class || 'Taxi'} 
+                                value={driver.vehicle_class || 'Regular'} 
                                 onChange={(e) => updateVehicleClass(e.target.value)}
                                 className="bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-xs font-bold text-primary focus:outline-none focus:border-primary/50 cursor-pointer"
                             >
-                                <option value="Taxi" className="bg-gray-900">Taxi</option>
-                                <option value="Comfort" className="bg-gray-900">Comfort</option>
-                                <option value="Comfort Plus" className="bg-gray-900">Comfort Plus</option>
+                                <option value="Regular" className="bg-gray-900">Regular</option>
+                                <option value="Comfort+" className="bg-gray-900">Comfort+</option>
                             </select>
                         </div>
                     </div>
@@ -450,7 +419,15 @@ const DriverProfile: React.FC = () => {
                                             {trip.status}
                                         </div>
                                     </td>
-                                    <td className="py-6 text-right">
+                                    <td className="py-6 text-right flex justify-end space-x-2">
+                                        {/* Playback Button */}
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setPlaybackTripId(trip.id); }}
+                                            className="p-3 bg-primary/10 text-primary rounded-xl hover:bg-primary hover:text-black transition-all shadow-lg shadow-primary/5 border border-primary/20"
+                                            title="View Route Playback"
+                                        >
+                                            <Play className="w-5 h-5 fill-current" />
+                                        </button>
                                         <button
                                             onClick={() => navigate(`/trips/${trip.id}`)}
                                             className="p-3 bg-white/5 text-gray-500 rounded-xl hover:bg-primary/20 hover:text-primary transition-all active:scale-95 border border-transparent hover:border-primary/20"
@@ -464,6 +441,13 @@ const DriverProfile: React.FC = () => {
                     </table>
                 </div>
             </div>
+
+            {/* Route Playback Modal */}
+            <RoutePlaybackModal 
+                isOpen={!!playbackTripId} 
+                onClose={() => setPlaybackTripId(null)} 
+                tripId={playbackTripId || ''} 
+            />
         </div>
     );
 };

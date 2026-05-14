@@ -1,0 +1,20 @@
+﻿Γ£à Firebase Admin initialized successfully
+=== EXPANDED DIAGNOSTIC REPORT ===
+
+Ride ZorBu8uUfdL6fCTLeaTz Passenger ID: Usq3Rx03EBKpW5fNvz5I
+Γ£à Passenger is NOT Preacher.
+   Passenger Name: Henry 
+
+Total system-wide pending rides: 1
+
+--- Other Drivers in Comfort+ ---
+None found.
+
+Preacher User Doc Balance: undefined
+Preacher Driver Doc Balance: 200
+
+--- Final Simulation Check ---
+Driver Class: Comfort+
+Ride Class:   Comfort+
+Match Result: true
+

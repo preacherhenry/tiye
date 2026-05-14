@@ -1,22 +1,14 @@
 import { Router } from 'express';
-import { getPendingApplications, getRejectedApplications, getAnalyticsStats, getDashboardStats, getAllDrivers, toggleDriverStatus, getDriverProfile, getTripDetails, approveApplication, rejectApplication, getApplicationDetails, verifyDocument, getAllAdmins, createAdmin, toggleAdminStatus, updateAdminRole, updateAdminProfile, changePassword, uploadAdminProfilePhoto, getLoginHistory, getPassengers, updateUserStatus, getPassengerProfile, getLiveTrips, getAdminTrips, deleteApplication, deleteDriver, deletePassenger, updateDriverVehicleClass } from '../controllers/adminController';
+import { getPendingApplications, getRejectedApplications, getAnalyticsStats, getDashboardStats, getAllDrivers, toggleDriverStatus, getDriverProfile, getTripDetails, approveApplication, rejectApplication, getApplicationDetails, verifyDocument, getAllAdmins, createAdmin, toggleAdminStatus, updateAdminRole, updateAdminProfile, changePassword, uploadAdminProfilePhoto, getLoginHistory, getPassengers, updateUserStatus, getPassengerProfile, getLiveTrips, getAdminTrips, deleteApplication, deleteDriver, deletePassenger, updateDriverVehicleClass, getTripPlayback } from '../controllers/adminController';
 import { authenticateToken } from '../middleware/authMiddleware';
 import { authorize } from '../middleware/rbacMiddleware';
 import multer from 'multer';
-import path from 'path';
+
 
 const router = Router();
 
-// Configure Multer for profile photos
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/');
-    },
-    filename: (req, file, cb) => {
-        cb(null, `admin-${Date.now()}${path.extname(file.originalname)}`);
-    }
-});
-const upload = multer({ storage });
+// Use memory storage — files go directly to Firebase Storage (permanent)
+const upload = multer({ storage: multer.memoryStorage() });
 
 // Apply authentication to all admin routes
 router.use(authenticateToken);
@@ -29,6 +21,7 @@ router.get('/drivers', authorize('driver:manage'), getAllDrivers);
 router.post('/drivers/:id/status', authorize('driver:manage'), toggleDriverStatus);
 router.get('/drivers/:id/profile', authorize('driver:manage'), getDriverProfile);
 router.get('/trips/:id', authorize('ride:monitor'), getTripDetails);
+router.get('/trips/:id/playback', authorize('ride:monitor'), getTripPlayback);
 router.get('/live-trips', authorize('ride:monitor'), getLiveTrips);
 router.get('/trips', authorize('ride:monitor'), getAdminTrips);
 router.get('/applications/:id', authorize('driver:manage'), getApplicationDetails);

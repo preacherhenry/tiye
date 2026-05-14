@@ -522,7 +522,7 @@ export const getDriverProfile = async (req: Request, res: Response) => {
         try {
             const activeTripSnapshot = await db.collection('rides')
                 .where('driver_id', '==', id)
-                .where('status', 'in', ['accepted', 'arrived', 'picked_up'])
+                .where('status', 'in', ['accepted', 'arrived', 'in_progress'])
                 .limit(1)
                 .get();
 
@@ -533,7 +533,9 @@ export const getDriverProfile = async (req: Request, res: Response) => {
                 activeTrip = {
                     ...tripData,
                     id: activeTripSnapshot.docs[0].id,
-                    passenger_name: passengerDoc.data()?.name
+                    passenger_name: passengerDoc.data()?.name,
+                    dest_lat: tripData.dest_lat,
+                    dest_lng: tripData.dest_lng
                 };
             }
         } catch (e: any) {
@@ -829,6 +831,36 @@ export const updateAdminProfile = async (req: Request, res: Response) => {
     }
 };
 
+export const getTripPlayback = async (req: Request, res: Response) => {
+    const { id } = req.params;
+    try {
+        const tripDoc = await db.collection('rides').doc(id).get();
+        if (!tripDoc.exists) {
+            return res.status(404).json({ success: false, message: 'Trip not found' });
+        }
+        const tripDetails = tripDoc.data();
+
+        let snapshot;
+        try {
+            snapshot = await db.collection('trip_gps_logs')
+                .where('trip_id', '==', id)
+                .orderBy('timestamp', 'asc')
+                .get();
+        } catch (e) {
+            snapshot = await db.collection('trip_gps_logs')
+                .where('trip_id', '==', id)
+                .get();
+        }
+            
+        const trail = snapshot.docs.map(doc => doc.data());
+        trail.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+        res.json({ success: true, trail, tripDetails });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 export const changePassword = async (req: Request, res: Response) => {
     const userId = (req as any).user?.id;
     const { currentPassword, newPassword } = req.body;
@@ -995,6 +1027,34 @@ export const getPassengerProfile = async (req: Request, res: Response) => {
         // Sort in memory
         trips.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
+        // 2.5 Get Active Trip
+        let activeTrip = null;
+        try {
+            const activeTripSnapshot = await db.collection('rides')
+                .where('passenger_id', '==', id)
+                .where('status', 'in', ['accepted', 'arrived', 'in_progress'])
+                .limit(1)
+                .get();
+
+            if (!activeTripSnapshot.empty) {
+                const tripData = activeTripSnapshot.docs[0].data();
+                let driverName = 'Unassigned';
+                if (tripData.driver_id) {
+                    const dDoc = await db.collection('users').doc(tripData.driver_id).get();
+                    driverName = dDoc.data()?.name || 'Unknown';
+                }
+                activeTrip = {
+                    ...tripData,
+                    id: activeTripSnapshot.docs[0].id,
+                    driver_name: driverName,
+                    dest_lat: tripData.dest_lat,
+                    dest_lng: tripData.dest_lng
+                };
+            }
+        } catch (e: any) {
+            console.warn("⚠️ [GET PROFILE] Active Trip check failed:", e.message);
+        }
+
         // 3. Get Stats
         const stats = {
             total_trips: trips.length,
@@ -1009,7 +1069,8 @@ export const getPassengerProfile = async (req: Request, res: Response) => {
             success: true,
             user,
             trips,
-            stats
+            stats,
+            activeTrip
         });
 
     } catch (error: any) {
@@ -1056,14 +1117,17 @@ export const getLiveTrips = async (req: Request, res: Response) => {
                 pickup_lng: tripData.pickup_lng,
                 pickup_location: tripData.pickup_location,
                 
-                dest_lat: tripData.dropoff_lat,
-                dest_lng: tripData.dropoff_lng,
+                dest_lat: tripData.dest_lat,
+                dest_lng: tripData.dest_lng,
                 destination: tripData.destination,
                 
                 current_lat: driverProfileData.current_lat,
                 current_lng: driverProfileData.current_lng,
                 heading: driverProfileData.heading,
                 last_seen_at: driverProfileData.last_seen_at,
+                speed: driverProfileData.speed || 0,
+                battery_level: driverProfileData.battery_level || null,
+                signal_strength: driverProfileData.signal_strength || null,
                 
                 status: tripData.status
             };

@@ -13,7 +13,7 @@ export const requestDeposit = async (req: Request, res: Response) => {
     }
 
     try {
-        const proof_photo = await uploadFile(file, 'deposits', req);
+        const proof_photo = await uploadFile(file, 'deposits');
 
         const transRef = db.collection('wallet_transactions').doc();
         await transRef.set({
