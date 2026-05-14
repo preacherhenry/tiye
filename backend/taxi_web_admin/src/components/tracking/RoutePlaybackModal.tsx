@@ -44,35 +44,38 @@ export default function RoutePlaybackModal({ isOpen, onClose, tripId }: RoutePla
                     const res = await api.get(`/admin/trips/${tripId}/playback`);
                     let fetchedTrail = res.data.trail || [];
                     
-                    // Fetch the recommended route snapped to the road network
-                    if (res.data.tripDetails && window.google) {
-                        const { pickup_lat, pickup_lng, dropoff_lat, dropoff_lng } = res.data.tripDetails;
-                        if (pickup_lat && dropoff_lat) {
-                            const directionsService = new window.google.maps.DirectionsService();
-                            directionsService.route(
-                                {
-                                    origin: { lat: pickup_lat, lng: pickup_lng },
-                                    destination: { lat: dropoff_lat, lng: dropoff_lng },
-                                    travelMode: window.google.maps.TravelMode.DRIVING,
-                                },
-                                (result, status) => {
-                                    if (status === window.google.maps.DirectionsStatus.OK && result) {
-                                        setDirections(result);
-                                        
-                                        // If there is no real GPS trail in the database, use the road-snapped route as a mock playback!
-                                        if (fetchedTrail.length === 0) {
-                                            const roadTrail = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
-                                            setTrail(roadTrail);
-                                            
-                                            if (mapRef.current) {
-                                                const bounds = new window.google.maps.LatLngBounds();
-                                                roadTrail.forEach(point => bounds.extend(point));
-                                                mapRef.current.fitBounds(bounds);
-                                            }
+                    // Fetch the recommended route using Free OSRM Engine
+                    if (res.data.tripDetails) {
+                        const { pickup_lat, pickup_lng, dest_lat, dest_lng, dropoff_lat, dropoff_lng } = res.data.tripDetails;
+                        const d_lat = dest_lat || dropoff_lat;
+                        const d_lng = dest_lng || dropoff_lng;
+
+                        if (pickup_lat && d_lat) {
+                            try {
+                                const url = `https://router.project-osrm.org/route/v1/driving/${pickup_lng},${pickup_lat};${d_lng},${d_lat}?overview=full&geometries=geojson`;
+                                const osrmRes = await fetch(url);
+                                const osrmData = await osrmRes.json();
+
+                                if (osrmData.code === 'Ok' && osrmData.routes && osrmData.routes.length > 0) {
+                                    const coords = osrmData.routes[0].geometry.coordinates.map((coord: any) => ({
+                                        lat: coord[1],
+                                        lng: coord[0]
+                                    }));
+                                    setDirections({ routes: [{ overview_path: coords }] } as any);
+                                    
+                                    // If there is no real GPS trail, use road route as mock
+                                    if (fetchedTrail.length === 0) {
+                                        setTrail(coords);
+                                        if (mapRef.current) {
+                                            const bounds = new window.google.maps.LatLngBounds();
+                                            coords.forEach((point: any) => bounds.extend(point));
+                                            mapRef.current.fitBounds(bounds);
                                         }
                                     }
                                 }
-                            );
+                            } catch (err) {
+                                console.error('OSRM Playback Error:', err);
+                            }
                         }
                     }
 

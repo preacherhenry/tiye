@@ -69,28 +69,42 @@ export default function LiveRideMonitor({ driverId, activeTrip }: LiveRideMonito
             tripIdRef.current = activeTrip.id;
         }
 
-        // Calculate Route
-        if (isLoaded && window.google) {
-            const directionsService = new window.google.maps.DirectionsService();
-            directionsService.route(
-                {
-                    origin: start,
-                    destination: { 
-                        lat: activeTrip.dest_lat || activeTrip.dropoff_lat || -15.4, 
-                        lng: activeTrip.dest_lng || activeTrip.dropoff_lng || 28.35 
-                    },
-                    travelMode: window.google.maps.TravelMode.DRIVING,
-                },
-                (result, status) => {
-                    if (status === window.google.maps.DirectionsStatus.OK) {
-                        setDirections(result);
-                        setMapError(null);
-                    } else {
-                        console.error('Directions Error:', status);
-                        setMapError(`Route Error: ${status}`);
-                    }
+        // Calculate Route using Free OSRM Engine
+        const calculateFreeRoute = async () => {
+            if (!activeTrip) return;
+            
+            const p_lat = activeTrip.pickup_lat;
+            const p_lng = activeTrip.pickup_lng;
+            const d_lat = activeTrip.dest_lat || activeTrip.dropoff_lat;
+            const d_lng = activeTrip.dest_lng || activeTrip.dropoff_lng;
+
+            if (!p_lat || !d_lat) return;
+
+            try {
+                // OSRM expects [lng,lat]
+                const url = `https://router.project-osrm.org/route/v1/driving/${p_lng},${p_lat};${d_lng},${d_lat}?overview=full&geometries=geojson`;
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+                    const coords = data.routes[0].geometry.coordinates.map((coord: any) => ({
+                        lat: coord[1],
+                        lng: coord[0]
+                    }));
+                    // We'll repurpose the directions state to store our free path
+                    setDirections({ routes: [{ overview_path: coords }] } as any);
+                    setMapError(null);
+                } else {
+                    setMapError('Route engine unavailable');
                 }
-            );
+            } catch (err) {
+                console.error('OSRM Error:', err);
+                setMapError('Network error in route engine');
+            }
+        };
+
+        if (isLoaded) {
+            calculateFreeRoute();
         }
 
         // Fetch real live location every 5 seconds
