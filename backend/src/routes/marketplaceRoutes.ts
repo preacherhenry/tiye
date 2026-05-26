@@ -27,15 +27,15 @@ router.get('/orders/:id', MarketplaceController.getOrderDetails);
 router.use(authorize('user:manage'));
 
 // Poster Management
-router.post('/posters/:slotId', upload.single('image'), MarketplaceController.updatePoster);
+router.post('/posters/:slotId', upload.single('image') as any, MarketplaceController.updatePoster);
 
 // Store Management
-router.post('/stores', upload.single('logo'), MarketplaceController.createStore);
-router.put('/stores/:id', upload.single('logo'), MarketplaceController.updateStore);
+router.post('/stores', upload.single('logo') as any, MarketplaceController.createStore);
+router.put('/stores/:id', upload.single('logo') as any, MarketplaceController.updateStore);
 
 // Item Management
-router.post('/items', upload.single('image'), MarketplaceController.createItem);
-router.put('/items/:id', upload.single('image'), MarketplaceController.updateItem);
+router.post('/items', upload.single('image') as any, MarketplaceController.createItem);
+router.put('/items/:id', upload.single('image') as any, MarketplaceController.updateItem);
 router.delete('/items/:id', MarketplaceController.deleteItem);
 
 // Order Management (Admin/Store)

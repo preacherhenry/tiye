@@ -41,7 +41,7 @@ export const getPendingApplications = async (req: Request, res: Response) => {
 };
 
 export const getApplicationDetails = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     try {
         const appDoc = await db.collection('driver_applications').doc(id).get();
         if (!appDoc.exists) return res.json({ success: false, message: 'Application not found' });
@@ -67,7 +67,7 @@ export const getApplicationDetails = async (req: Request, res: Response) => {
 };
 
 export const verifyDocument = async (req: Request, res: Response) => {
-    const { docId } = req.params;
+    const { docId } = (req.params as any);
     const { status, reason } = req.body; // 'verified' or 'rejected'
     const adminId = (req as any).user?.id || null;
 
@@ -96,7 +96,7 @@ export const verifyDocument = async (req: Request, res: Response) => {
 };
 
 export const approveApplication = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     const { vehicle_class } = req.body;
     const adminId = (req as any).user?.id || null;
 
@@ -181,7 +181,7 @@ export const approveApplication = async (req: Request, res: Response) => {
 };
 
 export const rejectApplication = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     const { reason } = req.body;
     const adminId = (req as any).user?.id || null;
 
@@ -443,7 +443,7 @@ export const getAllDrivers = async (req: Request, res: Response) => {
 };
 
 export const toggleDriverStatus = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     const { status } = req.body; // 'approved' or 'suspended'
     const adminUser = (req as any).user;
     const adminId = adminUser?.id || null;
@@ -484,7 +484,7 @@ export const toggleDriverStatus = async (req: Request, res: Response) => {
 };
 
 export const getDriverProfile = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     console.log(`🔍 [GET PROFILE] Fetching driver profile for ID: ${id}`);
 
     try {
@@ -621,7 +621,7 @@ export const getDriverProfile = async (req: Request, res: Response) => {
 };
 
 export const getTripDetails = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
 
     try {
         const rideRef = db.collection('rides').doc(id);
@@ -728,7 +728,7 @@ export const createAdmin = async (req: Request, res: Response) => {
 };
 
 export const toggleAdminStatus = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     const { status } = req.body;
     const adminId = (req as any).user?.id || null;
 
@@ -756,7 +756,7 @@ export const toggleAdminStatus = async (req: Request, res: Response) => {
 };
 
 export const updateAdminRole = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     const { role } = req.body;
     const adminUser = (req as any).user;
     const adminId = adminUser?.id || null;
@@ -833,7 +833,7 @@ export const updateAdminProfile = async (req: Request, res: Response) => {
 };
 
 export const getTripPlayback = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     try {
         const tripDoc = await db.collection('rides').doc(id).get();
         if (!tripDoc.exists) {
@@ -969,7 +969,7 @@ export const getPassengers = async (req: Request, res: Response) => {
 };
 
 export const updateUserStatus = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     const { status } = req.body;
 
     if (!['active', 'suspended'].includes(status)) {
@@ -990,7 +990,7 @@ export const updateUserStatus = async (req: Request, res: Response) => {
 };
 
 export const getPassengerProfile = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
 
     try {
         // 1. Get User Details
@@ -1144,7 +1144,7 @@ export const getLiveTrips = async (req: Request, res: Response) => {
 };
 
 export const getAdminTrips = async (req: Request, res: Response) => {
-    const { page = 1, limit = 10, search = '', status = '', date = '' } = req.query;
+    const { page = 1, limit = 10, search = '', status = '', date = '' } = (req.query as any);
     
     try {
         let query: any = db.collection('rides');
@@ -1213,7 +1213,7 @@ export const getAdminTrips = async (req: Request, res: Response) => {
     }
 };
 export const deleteApplication = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     const adminId = (req as any).user?.id || null;
     try {
         const appRef = db.collection('driver_applications').doc(id);
@@ -1246,7 +1246,7 @@ export const deleteApplication = async (req: Request, res: Response) => {
 };
 
 export const deleteDriver = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     const adminId = (req as any).user?.id || null;
     try {
         const userRef = db.collection('users').doc(id);
@@ -1300,7 +1300,7 @@ export const deleteDriver = async (req: Request, res: Response) => {
 };
 
 export const deletePassenger = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     const adminId = (req as any).user?.id || null;
     try {
         const userRef = db.collection('users').doc(id);
@@ -1343,7 +1343,7 @@ export const deletePassenger = async (req: Request, res: Response) => {
 };
 
 export const updateDriverVehicleClass = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     const { vehicle_class } = req.body;
     const adminId = (req as any).user?.id || null;
 

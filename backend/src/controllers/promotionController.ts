@@ -43,7 +43,7 @@ export const getAllPromotions = async (req: Request, res: Response) => {
 };
 
 export const deletePromotion = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     try {
         await db.collection('promotions').doc(id).delete();
         res.json({ success: true, message: 'Promotion deleted successfully' });

@@ -214,7 +214,7 @@ export const adminUpdatePlan = async (req: Request, res: Response) => {
 };
 
 export const adminDeletePlan = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     try {
         await db.collection('subscription_plans').doc(id).delete();
         res.json({ success: true, message: 'Plan deleted' });
@@ -224,7 +224,7 @@ export const adminDeletePlan = async (req: Request, res: Response) => {
 };
 
 export const adminToggleSubscriptionPause = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     const { status } = req.body; // 'active' or 'paused'
 
     if (!['active', 'paused'].includes(status)) {
@@ -333,7 +333,7 @@ export const adminToggleSubscriptionPause = async (req: Request, res: Response) 
 };
 
 export const adminDeleteSubscription = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
 
     try {
         const subRef = db.collection('driver_subscriptions').doc(id);
@@ -493,7 +493,7 @@ export const syncAllDriverSubscriptions = async () => {
 
 // --- DRIVER HISTORY ---
 export const getDriverSubscriptionHistory = async (req: Request, res: Response) => {
-    const { driver_id } = req.params;
+    const { driver_id } = (req.params as any);
 
     try {
         const querySnapshot = await db.collection('driver_subscriptions')
@@ -524,7 +524,7 @@ export const getDriverSubscriptionHistory = async (req: Request, res: Response) 
 };
 
 export const clearDriverSubscriptionHistory = async (req: Request, res: Response) => {
-    const { driver_id } = req.params;
+    const { driver_id } = (req.params as any);
 
     try {
         const querySnapshot = await db.collection('driver_subscriptions')

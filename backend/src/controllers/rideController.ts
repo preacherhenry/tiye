@@ -25,7 +25,7 @@ const fixPhotoUrl = (url: string | null, req: Request) => {
 };
 
 export const getRideDetails = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     try {
         const rideDoc = await db.collection('rides').doc(id).get();
 
@@ -493,8 +493,8 @@ export const updateRideStatus = async (req: Request, res: Response) => {
 };
 
 export const getPassengerRides = async (req: Request, res: Response) => {
-    const passengerId = req.params.id;
-    const status = req.query.status as string;
+    const passengerId = (req.params as any).id;
+    const status = (req.query as any).status as string;
 
     try {
         let query = db.collection('rides').where('passenger_id', '==', passengerId);
@@ -536,8 +536,8 @@ export const getPassengerRides = async (req: Request, res: Response) => {
 };
 
 export const getDriverRides = async (req: Request, res: Response) => {
-    const driverId = req.params.id;
-    const status = req.query.status as string;
+    const driverId = (req.params as any).id;
+    const status = (req.query as any).status as string;
 
     try {
         let query = db.collection('rides').where('driver_id', '==', driverId);

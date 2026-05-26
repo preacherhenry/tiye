@@ -36,7 +36,7 @@ export const requestDeposit = async (req: Request, res: Response) => {
 export const getWalletHistory = async (req: Request, res: Response) => {
     const userId = (req as any).user?.id;
     const userRole = (req as any).user?.role;
-    const { driver_id } = req.params; // If admin is viewing a specific driver
+    const { driver_id } = (req.params as any); // If admin is viewing a specific driver
 
     // Security: Drivers can only see their own wallet. Staff can see anyone's.
     const targetDriverId = driver_id || userId;
@@ -71,7 +71,7 @@ export const getWalletHistory = async (req: Request, res: Response) => {
 
 export const getWalletBalance = async (req: Request, res: Response) => {
     const userId = (req as any).user?.id;
-    const { driver_id } = req.params;
+    const { driver_id } = (req.params as any);
 
     const targetDriverId = driver_id || userId;
 

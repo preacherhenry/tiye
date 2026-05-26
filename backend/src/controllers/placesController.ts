@@ -4,7 +4,7 @@ const fetch = require('node-fetch');
 
 export const searchPlaces = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { q } = req.query;
+        const { q } = (req.query as any);
 
         if (!q) {
             res.status(400).json({ success: false, message: 'Query parameter "q" is required' });
@@ -51,7 +51,7 @@ export const searchPlaces = async (req: Request, res: Response): Promise<void> =
 
 export const reverseGeocode = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { lat, lon } = req.query;
+        const { lat, lon } = (req.query as any);
 
         if (!lat || !lon) {
             res.status(400).json({ success: false, message: 'Parameters "lat" and "lon" are required' });
@@ -127,7 +127,7 @@ export const addPlace = async (req: Request, res: Response) => {
 
 export const updatePlace = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
+        const { id } = (req.params as any);
         const { name, description, latitude, longitude, category, area } = req.body;
 
         const updates: any = {};
@@ -147,7 +147,7 @@ export const updatePlace = async (req: Request, res: Response) => {
 
 export const deletePlace = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
+        const { id } = (req.params as any);
         await db.collection('places').doc(id).delete();
         res.json({ success: true, message: 'Place deleted successfully' });
     } catch (error: any) {

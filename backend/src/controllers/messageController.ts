@@ -49,7 +49,7 @@ export const getUnreadCount = async (req: Request, res: Response) => {
 };
 
 export const getMessages = async (req: Request, res: Response) => {
-    const { conversationId } = req.params;
+    const { conversationId } = (req.params as any);
     const userId = (req as any).user?.id;
 
     if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
@@ -257,7 +257,7 @@ export const uploadMessageFile = async (req: Request, res: Response) => {
 };
 
 export const markAsRead = async (req: Request, res: Response) => {
-    const { conversationId } = req.params;
+    const { conversationId } = (req.params as any);
     const userId = (req as any).user?.id;
 
     if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });

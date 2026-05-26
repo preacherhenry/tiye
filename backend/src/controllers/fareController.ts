@@ -33,7 +33,7 @@ export const createZone = async (req: Request, res: Response) => {
 };
 
 export const updateZone = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     const { name, lat, lng, radius_km, status } = req.body;
     try {
         const updateData: any = {};
@@ -52,7 +52,7 @@ export const updateZone = async (req: Request, res: Response) => {
 };
 
 export const deleteZone = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     try {
         await db.collection('zones').doc(id).delete();
         res.json({ success: true, message: 'Zone deleted successfully' });
@@ -107,7 +107,7 @@ export const createFixedRoute = async (req: Request, res: Response) => {
 };
 
 export const updateFixedRoute = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     const { name, pickup_zone_id, dest_zone_id, fixed_price, status } = req.body;
     try {
         const updateData: any = {};
@@ -134,7 +134,7 @@ export const updateFixedRoute = async (req: Request, res: Response) => {
 };
 
 export const deleteFixedRoute = async (req: Request, res: Response) => {
-    const { id } = req.params;
+    const { id } = (req.params as any);
     try {
         await db.collection('fixed_routes').doc(id).delete();
         res.json({ success: true, message: 'Fixed route deleted successfully' });

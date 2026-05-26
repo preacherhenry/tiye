@@ -35,7 +35,7 @@ export const getPosters = async (req: Request, res: Response) => {
 // Update a specific poster slot
 export const updatePoster = async (req: Request, res: Response) => {
     try {
-        const { slotId } = req.params; // e.g., P1, A1
+        const { slotId } = (req.params as any); // e.g., P1, A1
         const { store_id, status } = req.body;
         let image_url = req.body.image_url;
 
@@ -102,7 +102,7 @@ export const createStore = async (req: Request, res: Response) => {
 
 export const updateStore = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
+        const { id } = (req.params as any);
         const { store_name, store_description } = req.body;
         let store_logo = req.body.store_logo;
 
@@ -128,7 +128,7 @@ export const updateStore = async (req: Request, res: Response) => {
 
 export const getItems = async (req: Request, res: Response) => {
     try {
-        const { store_id } = req.query;
+        const { store_id } = (req.query as any);
         let query: any = db.collection('store_items');
         
         if (store_id) {
@@ -172,7 +172,7 @@ export const createItem = async (req: Request, res: Response) => {
 
 export const updateItem = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
+        const { id } = (req.params as any);
         const { item_name, description, price, stock_quantity, status } = req.body;
         let image_url = req.body.image_url;
 
@@ -197,7 +197,7 @@ export const updateItem = async (req: Request, res: Response) => {
 
 export const deleteItem = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
+        const { id } = (req.params as any);
         await db.collection('store_items').doc(id).delete();
         res.json({ success: true, message: 'Item deleted successfully' });
     } catch (error: any) {
@@ -285,7 +285,7 @@ export const getUserOrders = async (req: any, res: Response) => {
 
 export const getOrderDetails = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
+        const { id } = (req.params as any);
         const orderDoc = await db.collection('orders').doc(id).get();
 
         if (!orderDoc.exists) {
@@ -300,7 +300,7 @@ export const getOrderDetails = async (req: Request, res: Response) => {
 
 export const updateOrderStatus = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
+        const { id } = (req.params as any);
         const { status, estimated_delivery_time } = req.body;
 
         const updateData: any = { updated_at: new Date().toISOString() };
