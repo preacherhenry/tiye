@@ -22,13 +22,14 @@ if (!fs.existsSync(testFilePath)) {
 const mockFile = {
     path: testFilePath,
     filename: 'test-upload-' + Date.now() + '.jpg',
+    originalname: 'test_image.jpg',
     mimetype: 'image/jpeg'
 } as any;
 
 async function runTest() {
     console.log('🚀 Starting Firebase Storage test upload...');
     try {
-        const url = await uploadFile(mockFile, 'test_uploads', mockReq);
+        const url = await uploadFile(mockFile, 'test_uploads');
         console.log('🏁 Test completed. URL:', url);
         if (url.includes('storage.googleapis.com')) {
             console.log('✅ SUCCESS: Uploaded to Firebase Storage!');

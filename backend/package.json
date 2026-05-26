@@ -6,6 +6,7 @@
     "dev": "nodemon src/app.ts",
     "build": "tsc",
     "start": "node dist/app.js",
+    "postinstall": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -13,22 +14,21 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
+    "firebase-tools": "^15.3.1",
+    "nodemon": "^3.1.11",
+    "ts-node": "^10.9.2"
+  },
+  "dependencies": {
     "@types/bcryptjs": "^3.0.0",
     "@types/cors": "^2.8.19",
     "@types/dotenv": "^8.2.3",
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.0.0",
     "@types/mysql": "^2.15.27",
     "@types/node": "^25.0.3",
-    "@types/uuid": "^11.0.0",
-    "firebase-tools": "^15.3.1",
-    "nodemon": "^3.1.11",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
-  },
-  "dependencies": {
-    "@types/jsonwebtoken": "^9.0.10",
     "@types/node-cron": "^3.0.11",
+    "@types/uuid": "^11.0.0",
     "axios": "^1.13.2",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.10.0",
@@ -43,6 +43,7 @@
     "mysql2": "^3.16.0",
     "node-cron": "^4.2.1",
     "node-fetch": "^2.7.0",
+    "typescript": "^5.9.3",
     "uuid": "^13.0.0"
   }
 }

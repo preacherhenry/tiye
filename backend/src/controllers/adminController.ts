@@ -3,6 +3,7 @@ import { db } from '../config/firebase';
 import bcrypt from 'bcryptjs';
 import { checkOfflineStatus } from './driverController';
 import { hasPermission } from '../config/roles';
+import { uploadFile } from '../utils/storage';
 
 const fixUrl = (url: string | null, req: Request) => {
     if (!url) return null;
@@ -895,13 +896,15 @@ export const uploadAdminProfilePhoto = async (req: Request, res: Response) => {
     }
 
     try {
-        const host = req.get('host') || 'localhost:5000';
-        const photoUrl = `${req.protocol}://${host}/uploads/${req.file.filename}`;
+        // Use permanent Firebase Storage instead of local ephemeral storage
+        const photoUrl = await uploadFile(req.file as Express.Multer.File, 'admin_profiles');
 
         const userRef = db.collection('users').doc(userId);
         await userRef.update({ profile_photo: photoUrl });
 
         const updatedDoc = await userRef.get();
+        // Firebase URLs are already public and properly formatted, so no need for fixUrl usually, 
+        // but we'll use it if it handles other transformations.
         const fixedPhotoUrl = fixUrl(photoUrl, req);
 
         res.json({
@@ -911,6 +914,7 @@ export const uploadAdminProfilePhoto = async (req: Request, res: Response) => {
             user: { ...updatedDoc.data(), id: updatedDoc.id, profile_photo: fixedPhotoUrl }
         });
     } catch (error: any) {
+        console.error('Admin Photo Upload Error:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 };
