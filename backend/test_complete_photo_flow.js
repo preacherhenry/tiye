@@ -14,6 +14,7 @@ async function testPhotoFlow() {
 
     try {
         const registerResponse = await axios.post('http://localhost:5000/register', {
+            username: `phototest_${Date.now()}`,
             name: 'Photo Flow Test',
             phone: '+260975555555',
             email: testEmail,

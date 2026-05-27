@@ -1,9 +1,19 @@
 import { v2 as cloudinary } from 'cloudinary';
+import dotenv from 'dotenv';
 
-// Configure Cloudinary using environment variables
-// It will automatically pick up CLOUDINARY_URL if it's set in the environment.
-if (process.env.CLOUDINARY_URL) {
-    console.log('✅ Cloudinary configured automatically via CLOUDINARY_URL');
+dotenv.config();
+
+// Configure Cloudinary
+if (process.env.CLOUDINARY_URL && process.env.CLOUDINARY_URL.startsWith('cloudinary://')) {
+    const [api_key, rest] = process.env.CLOUDINARY_URL.replace('cloudinary://', '').split(':');
+    const [api_secret, cloud_name] = rest.split('@');
+    cloudinary.config({
+        cloud_name,
+        api_key,
+        api_secret,
+        secure: true
+    });
+    console.log('✅ Cloudinary configured successfully');
 } else {
     // Fallback if user provides individual keys
     cloudinary.config({
@@ -38,34 +48,19 @@ export const uploadFile = async (file: Express.Multer.File, folder: string): Pro
             return reject(new Error('File has neither buffer nor path — check multer configuration.'));
         }
 
-        const safeFilename = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_').split('.').slice(0, -1).join('.');
+        const safeFilename = file.originalname ? file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_').split('.').slice(0, -1).join('.') : 'file';
 
-        // Create an upload stream to Cloudinary
-        const uploadStream = cloudinary.uploader.upload_stream(
-            {
+        try {
+            const result = await cloudinary.uploader.upload(`data:${file.mimetype || 'image/jpeg'};base64,${fileBuffer.toString('base64')}`, {
                 folder: folder,
                 public_id: `${Date.now()}-${safeFilename}`,
-                resource_type: 'auto' // Automatically detect if it's an image, video, or raw file (PDF)
-            },
-            (error, result) => {
-                if (error) {
-                    console.error('❌ Cloudinary upload failed:', error);
-                    return reject(error);
-                }
-                if (result && result.secure_url) {
-                    console.log(`✅ Cloudinary upload successful: ${result.secure_url}`);
-                    resolve(result.secure_url);
-                } else {
-                    reject(new Error('Unknown Cloudinary upload error'));
-                }
-            }
-        );
-
-        // Pipe the buffer into the stream
-        const { Readable } = require('stream');
-        const readableStream = new Readable();
-        readableStream.push(fileBuffer);
-        readableStream.push(null); // End of stream
-        readableStream.pipe(uploadStream);
+                resource_type: 'auto'
+            });
+            console.log(`✅ Cloudinary upload successful: ${result.secure_url}`);
+            resolve(result.secure_url);
+        } catch (error) {
+            console.error('❌ Cloudinary upload failed:', error);
+            reject(error);
+        }
     });
 };
