@@ -1,27 +1,35 @@
 import { v2 as cloudinary } from 'cloudinary';
 import dotenv from 'dotenv';
 
+import path from 'path';
+
+// Try loading .env from backend root explicitly
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+// Fallback to normal dotenv config
 dotenv.config();
 
 // Configure Cloudinary
-if (process.env.CLOUDINARY_URL && process.env.CLOUDINARY_URL.startsWith('cloudinary://')) {
-    const [api_key, rest] = process.env.CLOUDINARY_URL.replace('cloudinary://', '').split(':');
-    const [api_secret, cloud_name] = rest.split('@');
-    cloudinary.config({
-        cloud_name,
-        api_key,
-        api_secret,
-        secure: true
-    });
-    console.log('✅ Cloudinary configured successfully');
-} else {
-    // Fallback if user provides individual keys
-    cloudinary.config({
-        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-        api_key: process.env.CLOUDINARY_API_KEY,
-        api_secret: process.env.CLOUDINARY_API_SECRET
-    });
-    console.log('✅ Cloudinary configured via separate API keys');
+try {
+    if (process.env.CLOUDINARY_URL) {
+        // Cloudinary SDK automatically parses CLOUDINARY_URL if we pass true
+        cloudinary.config(true);
+        // Also force secure URLs
+        cloudinary.config({ secure: true });
+        console.log('✅ Cloudinary configured successfully using URL');
+    } else if (process.env.CLOUDINARY_API_KEY) {
+        // Fallback if user provides individual keys
+        cloudinary.config({
+            cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+            api_key: process.env.CLOUDINARY_API_KEY,
+            api_secret: process.env.CLOUDINARY_API_SECRET,
+            secure: true
+        });
+        console.log('✅ Cloudinary configured via separate API keys');
+    } else {
+        console.warn('⚠️ Cloudinary config missing! File uploads will fail.');
+    }
+} catch (error) {
+    console.error('❌ Cloudinary configuration error:', error);
 }
 
 /**
